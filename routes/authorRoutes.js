@@ -44,7 +44,12 @@ import {
     generateLiveStreamToken,
     createSubscriptionSession,
     onboard_author,
-    endQASession
+    endQASession,
+    getPlans,
+    getMyPlans,
+    getSubscriptionStatus,
+    getReview,
+    getAuthorEarnings
 } from '../controllers/authorController.js';
 import { upload } from "../middlewares/upload.js";
 import { authorAuth } from "../middlewares/authorAuth.js";
@@ -94,6 +99,8 @@ authorRouter.post(
     createBook
 );
 
+authorRouter.get('/getReview', authorAuth, getReview);
+
 authorRouter.put(
     '/editBook',
     authorAuth,
@@ -141,6 +148,14 @@ authorRouter.put('/editSession/:sessionId', authorAuth, upload.fields([
 authorRouter.post('/onboard-author', authorAuth, onboard_author);
 
 authorRouter.post('/subscribe',authorAuth, createSubscriptionSession);
+
+authorRouter.get('/allPlans', authorAuth, getPlans);
+
+authorRouter.get('/getMyPlans', authorAuth, getMyPlans);
+
+authorRouter.get('/subscription/status', authorAuth, getSubscriptionStatus);
+
+authorRouter.get('/getAuthorEarnings/status', authorAuth, getAuthorEarnings);
 //chat 
 
 authorRouter.post('/createGroupChat', authorAuth, upload.single("profilePic"), createGroupChat);
@@ -170,3 +185,4 @@ authorRouter.delete('/:chatId', authorAuth, clearChat);
 authorRouter.post('/uploadImages', authorAuth, upload.array("files", 10), fileUploadforImage);
 
 authorRouter.post('/generate-LiveStreamToken', generateLiveStreamToken);
+

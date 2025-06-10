@@ -46,7 +46,11 @@ import {
     ContactIssue,
     purchaseBook,
     updateContactIssue,
-    anonymousContactIssue
+    anonymousContactIssue,
+    createOrder,
+    getAllOrder,
+    getAllOrderById,
+    updateOrder
 } from '../controllers/userController.js';
 
 import { auth } from "../middlewares/auth.js";
@@ -66,7 +70,7 @@ userRouter.post('/verifyForgetPasswordOtp', verifyForgetPasswordOtp);
 
 userRouter.post('/resetPassword', resetPassword);
 
-userRouter.post('/changePassword',auth, changePassword);
+userRouter.post('/changePassword', auth, changePassword);
 
 userRouter.post('/social-login', socialLogin);
 
@@ -76,51 +80,51 @@ userRouter.put('/editProfile', auth, upload.fields([
     { name: "avatar_url", maxCount: 1 },
 ]), editProfile);
 
-userRouter.post('/follow/:id',auth, follow);
+userRouter.post('/follow/:id', auth, follow);
 
-userRouter.post('/unfollow/:id',auth, unFollow);
+userRouter.post('/unfollow/:id', auth, unFollow);
 
-userRouter.get('/getAllBooks',auth,  getAllBooks);
+userRouter.get('/getAllBooks', auth, getAllBooks);
 
-userRouter.get('/getAllAuthor',auth,  getAllAuthor);
+userRouter.get('/getAllAuthor', auth, getAllAuthor);
 
-userRouter.post('/favBook',auth, favOrUnFavBook);
+userRouter.post('/favBook', auth, favOrUnFavBook);
 
-userRouter.get('/getAllfavBook',auth, getAllfavBook);
+userRouter.get('/getAllfavBook', auth, getAllfavBook);
 
-userRouter.get('/followedAuthor',auth, followedAuthor);
+userRouter.get('/followedAuthor', auth, followedAuthor);
 
-userRouter.post('/addToCart', auth,  addToCart);
+userRouter.post('/addToCart', auth, addToCart);
 
-userRouter.get('/getAllCart', auth,  getAllCart);
+userRouter.get('/getAllCart', auth, getAllCart);
 
-userRouter.put('/updateCart', auth,  updateCart);
+userRouter.put('/updateCart', auth, updateCart);
 
-userRouter.delete('/deleteCart/:id', auth,  deleteCart);
+userRouter.delete('/deleteCart/:id', auth, deleteCart);
 
-userRouter.post('/addQuantity', auth,  addQuantity);
+userRouter.post('/addQuantity', auth, addQuantity);
 
 userRouter.post('/removeQuantity', auth, removeQuantity);
 
 userRouter.post('/createReview', auth, createReview);
 
-userRouter.get('/getReviewsBook/:bookId', auth, getReviewsBook);
+userRouter.get('/getReviewsBook/:bookId',  getReviewsBook);
 
-userRouter.get('/getTopAuthor',auth, getTopAuthor);
+userRouter.get('/getTopAuthor', auth, getTopAuthor);
 
-userRouter.get('/getAllCategories',auth, getAllCategories);
+userRouter.get('/getAllCategories', auth, getAllCategories);
 
 userRouter.get('/getAllNewBook', auth, getAllNewBook);
 
-userRouter.get('/getAllBook/:id',auth,  getBookById);
+userRouter.get('/getAllBook/:id', auth, getBookById);
 
 userRouter.get('/getAllAuthor/:id', auth, getAllAuthorById);
 
-userRouter.post('/recordBookRead', auth,  recordBookRead); 
+userRouter.post('/recordBookRead', auth, recordBookRead);
 
-userRouter.get('/getAllUserNotification', auth,  getAllUserNotification); 
+userRouter.get('/getAllUserNotification', auth, getAllUserNotification);
 
-userRouter.delete('/deleteAll',auth, deleteAllNotification);
+userRouter.delete('/deleteAll', auth, deleteAllNotification);
 
 userRouter.delete('/delete/:notificationId', auth, deleteNotification);
 
@@ -128,22 +132,30 @@ userRouter.get('/getQASession', auth, getQASession);
 
 userRouter.get('/getAllFollwedUser', auth, getAllFollwedUser);
 
-userRouter.post('/ContactIssue',auth, ContactIssue);
+userRouter.post('/ContactIssue', auth, ContactIssue);
 
-userRouter.put('/UpdateContactIssue/:id',auth, updateContactIssue);
+userRouter.put('/UpdateContactIssue/:id', auth, updateContactIssue);
 
-userRouter.post('/purchaseBook',auth, purchaseBook);
+userRouter.post('/purchaseBook', auth, purchaseBook);
+
+userRouter.post('/createOrder', auth, createOrder);
+
+userRouter.post('/getAllOrder', auth, getAllOrder);
+
+userRouter.post('/getAllOrder/:id', auth, getAllOrderById);
+
+userRouter.post('/updateOrder/:id', auth, updateOrder);
 
 
 // Anynomous User
 
 userRouter.get('/getAllAnonymousBook', getAllAnonymousBook);
 
-userRouter.post('/AnonymousContactIssue',auth, anonymousContactIssue);
+userRouter.post('/AnonymousContactIssue', auth, anonymousContactIssue);
 
 userRouter.get('/getAnonymousTopAuthor', getAnonymousTopAuthor);
 
-userRouter.get('/getAllAnonymousCategories', getAllAnonymousCategories); 
+userRouter.get('/getAllAnonymousCategories', getAllAnonymousCategories);
 
 userRouter.get('/getAllAnonymousAuthor', getAllAnonymousAuthor);
 
@@ -153,4 +165,4 @@ userRouter.get('/getAllAnonymousBook/:id', getAllAnonymousBookById);
 
 userRouter.get('/getAllAnonymousAuthor/:id', getAllAnonymousAuthorById);
 
- 
+

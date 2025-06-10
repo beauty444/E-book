@@ -1930,6 +1930,55 @@ export async function addAuthor(req, res) {
     }
 }
 
+export async function getPlans(req, res) {
+    try {
+        const plans = await prisma.plan.findMany({
+            orderBy: { id: "asc" },
+        });
+
+        return res.status(200).json({
+            status: 200,
+            message: 'Get All Plans',
+            success: true,
+            plans
+        });
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            status: 500,
+            message: 'Internal Server Error',
+            success: false,
+            error: error.message
+        });
+    }
+}
+
+export const getAdminSalesSummary = async (req, res) => {
+    try {
+        const summary = await prisma.order.aggregate({
+            _sum: { commissionAmount: true, price: true },
+        });
+
+        return res.status(200).json({
+            status: 200,
+            message: 'Get All Plans',
+            success: true,
+            totalRevenue: summary._sum.price || 0,
+            platformEarnings: summary._sum.commissionAmount || 0,
+            plans
+        });
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            status: 500,
+            message: 'Internal Server Error',
+            success: false,
+            error: error.message
+        });
+    }
+}
+
+
 // export const overrideBookPrice = async (req, res) => {
 //   try {
 //     const { bookId } = req.params;

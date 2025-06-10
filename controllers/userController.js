@@ -1657,6 +1657,7 @@ export const getBookById = async (req, res) => {
             include: {
                 bookMedia: true,
                 author: true,
+                Purchase: true,
                 books: {
                     include: {
                         category: true
@@ -2181,20 +2182,28 @@ export const getReviewsBook = async (req, res) => {
     try {
         const { bookId } = req.params;
 
+
         const reviews = await prisma.review.findMany({
             where: { bookId: parseInt(bookId) },
             include: { user: true }
         });
 
+        // ✅ Update avatar_url paths
+        reviews.map((review) => {
+            if (review.user && review.user.avatar_url) {
+                review.user.avatar_url = `${baseurl}/books/${review.user.avatar_url}`;
+            }
+        });
+
         return res.status(200).json({
             success: true,
-            message: "Review added successfully",
+            message: "Reviews fetched successfully",
             status: 200,
             reviews
         });
 
     } catch (error) {
-        console.error("Error fetching books:", error);
+        console.error("Error fetching reviews:", error);
         return res.status(500).json({
             success: false,
             message: "Internal server error",
@@ -2203,6 +2212,7 @@ export const getReviewsBook = async (req, res) => {
         });
     }
 };
+
 
 export const recordBookRead = async (req, res) => {
     try {
@@ -2248,7 +2258,6 @@ export const recordBookRead = async (req, res) => {
         });
     }
 }
-
 
 export async function getAllUserNotification(req, res) {
     try {
@@ -2310,8 +2319,6 @@ export async function getAllUserNotification(req, res) {
     }
 }
 
-
-
 // export async function getAllUserNotification(req, res) {
 //     try {
 //         const notifications = await prisma.notification.findMany({
@@ -2350,7 +2357,6 @@ export async function getAllUserNotification(req, res) {
 //         });
 //     }
 // }
-
 
 export async function deleteNotification(req, res) {
     try {
@@ -2420,7 +2426,6 @@ export async function deleteAllNotification(req, res) {
         });
     }
 }
-
 
 //Anonymous user
 
@@ -3252,12 +3257,10 @@ export const anonymousContactIssue = async (req, res) => {
 };
 
 
-// routes/purchaseRouter.js (or similar)
-
 export const purchaseBook = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { bookId } = req.body;
+        const { bookId, success_url, cancel_url } = req.body;
 
         const book = await prisma.book.findUnique({
             where: { id: bookId },
@@ -3268,9 +3271,8 @@ export const purchaseBook = async (req, res) => {
             return res.status(404).json({ error: 'Book not found.' });
         }
 
-        // ✅ FREE BOOK: Grant access immediately
+
         if (book.isFree) {
-            // Check if user already has the book
             const existing = await prisma.purchase.findFirst({
                 where: { userId, bookId },
             });
@@ -3290,13 +3292,10 @@ export const purchaseBook = async (req, res) => {
         }
 
         const author = book.author;
-
         let isOnboarded = false;
 
-        // ✅ Check author's Stripe status
         if (author?.stripeAccountId) {
             const account = await stripe.accounts.retrieve(author.stripeAccountId);
-
             if (account.charges_enabled && account.payouts_enabled) {
                 isOnboarded = true;
             }
@@ -3325,15 +3324,13 @@ export const purchaseBook = async (req, res) => {
             mode: 'payment',
             line_items: [lineItem],
             metadata,
-            success_url: `${process.env.FRONTEND_URL}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${process.env.FRONTEND_URL}/book/${book.id}`,
+            success_url: success_url,
+            cancel_url: cancel_url,
         };
 
-
-        // ✅ Route earnings if author is onboarded
         if (isOnboarded) {
             sessionParams.payment_intent_data = {
-                application_fee_amount: 0, // add your platform fee here
+                application_fee_amount: 0,
                 transfer_data: {
                     destination: author.stripeAccountId,
                 },
@@ -3341,11 +3338,250 @@ export const purchaseBook = async (req, res) => {
         }
 
         const session = await stripe.checkout.sessions.create(sessionParams);
-        res.json({ sessionUrl: session.url });
+        return res.status(200).json({
+            status: 200,
+            sessionUrl: session.url
+        });
 
     } catch (error) {
-        console.error("❌ Error in purchaseBook:", error.message);
-        res.status(500).json({ error: 'Internal server error' });
+        console.log(error);
+        return res.status(500).json({
+            status: 500,
+            message: 'Internal Server Error',
+            success: false,
+            error: error.message,
+        });
     }
 };
+
+
+export const createOrder = async (req, res) => {
+    try {
+        const { userId, bookId, authorId, price, costPrice, quantity, discount, paymentMethod } = req.body;
+        const orderId = `ORD${Date.now()}`;
+
+        const commissionAmount = price * 0.10; // 10% platform fee
+        const authorEarning = price - commissionAmount;
+
+        const order = await prisma.order.create({
+            data: {
+                orderId,
+                userId,
+                bookId,
+                authorId,
+                price,
+                costPrice,
+                quantity,
+                discount,
+                commissionAmount,
+                authorEarning,
+                paymentMethod,
+                status: 'paid',
+            },
+        });
+
+        return res.status(200).json({
+            status: 200,
+            message: 'Order created successfully',
+            order
+        });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            status: 500,
+            message: 'Internal Server Error',
+            success: false,
+            error: error.message,
+        });
+    }
+};
+
+export const getAllOrder = async (req, res) => {
+    try {
+        const orders = await prisma.order.findMany({
+            include: { user: true, book: true, author: true },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        return res.status(200).json({
+            status: 200,
+            message: 'Order Fetched successfully',
+            orders
+        });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            status: 500,
+            message: 'Internal Server Error',
+            success: false,
+            error: error.message,
+        });
+    }
+};
+
+export const getAllOrderById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const order = await prisma.order.findUnique({
+            where: { id: parseInt(id) },
+            include: { user: true, book: true, author: true },
+        });
+
+        if (!order) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        return res.status(200).json({
+            status: 200,
+            message: 'Order Fetched successfully',
+            order
+        });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            status: 500,
+            message: 'Internal Server Error',
+            success: false,
+            error: error.message,
+        });
+    }
+};
+
+export const updateOrder = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        const order = await prisma.order.update({
+            where: { id: parseInt(id) },
+            data: { status },
+        });
+
+        return res.status(200).json({
+            status: 200,
+            message: 'Order status updated successfully',
+            order
+        });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            status: 500,
+            message: 'Internal Server Error',
+            success: false,
+            error: error.message,
+        });
+    }
+};
+
+
+
+// export const purchaseBook = async (req, res) => {
+//     try {
+//         const userId = req.user.id;
+//         const { bookId } = req.body;
+
+//         const book = await prisma.book.findUnique({
+//             where: { id: bookId },
+//             include: { author: true },
+//         });
+
+//         if (!book) {
+//             return res.status(404).json({ error: 'Book not found.' });
+//         }
+
+//         // ✅ FREE BOOK: Grant access immediately
+//         if (book.isFree) {
+//             // Check if user already has the book
+//             const existing = await prisma.purchase.findFirst({
+//                 where: { userId, bookId },
+//             });
+
+//             console.log('book.isFree', book.isFree)
+
+//             if (!existing) {
+//                 await prisma.purchase.create({
+//                     data: {
+//                         userId,
+//                         bookId,
+//                         amount: 0,
+//                         isHeld: false,
+//                     },
+//                 });
+//             }
+
+//             return res.status(200).json({ message: 'Book added to your library (free).' });
+//         }
+
+//         const author = book.author;
+
+//         let isOnboarded = false;
+
+//         // ✅ Check author's Stripe status
+//         if (author?.stripeAccountId) {
+//             const account = await stripe.accounts.retrieve(author.stripeAccountId);
+
+//             if (account.charges_enabled && account.payouts_enabled) {
+//                 isOnboarded = true;
+//             }
+//         }
+
+//         const lineItem = {
+//             price_data: {
+//                 currency: 'usd',
+//                 product_data: {
+//                     name: book.title,
+//                 },
+//                 unit_amount: Math.round(book.price * 100),
+//             },
+//             quantity: 1,
+//         };
+
+//         const metadata = {
+//             userId: userId.toString(),
+//             bookId: book.id.toString(),
+//             authorId: author?.id?.toString() || '',
+//             isOnboarded: isOnboarded.toString(),
+//         };
+
+//         const sessionParams = {
+//             payment_method_types: ['card'],
+//             mode: 'payment',
+//             line_items: [lineItem],
+//             metadata,
+//             success_url: `${process.env.FRONTEND_URL}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
+//             cancel_url: `${process.env.FRONTEND_URL}/book/${book.id}`,
+//         };
+
+
+//         // ✅ Route earnings if author is onboarded
+//         if (isOnboarded) {
+//             sessionParams.payment_intent_data = {
+//                 application_fee_amount: 0, // add your platform fee here
+//                 transfer_data: {
+//                     destination: author.stripeAccountId,
+//                 },
+//             };
+//         }
+
+//         const session = await stripe.checkout.sessions.create(sessionParams);
+//         return res.status(200).json({
+//             status: 200,
+//             sessionUrl: session.url
+//         });
+//     } catch (error) {
+//         console.log(error);
+//         return res.status(500).json({
+//             status: 500,
+//             message: 'Internal Server Error',
+//             success: false,
+//             error: error
+//         });
+//     }
+// }
+
 

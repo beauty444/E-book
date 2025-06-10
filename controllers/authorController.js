@@ -6,7 +6,7 @@ import path from 'path'
 import crypto from 'crypto';
 import dotenv from "dotenv";
 import moment from 'moment';
-// import stripe from '../utils/stripeClient.js';
+import stripe from '../utils/stripeClient.js';
 import nodemailer from 'nodemailer';
 import { fileURLToPath } from 'url';
 const baseurl = process.env.BASE_URL;
@@ -322,7 +322,6 @@ export async function socialLogin(req, res) {
     }
 }
 
-
 export async function forgotPassword(req, res) {
     const { email } = req.body;
 
@@ -624,7 +623,6 @@ export async function resetPassword(req, res, next) {
     }
 }
 
-
 export async function changePassword(req, res) {
     try {
         const { current_password, new_password } = req.body;
@@ -799,7 +797,7 @@ export async function getAllBook(req, res) {
                     include: {
                         category: true
                     }
-                }
+                },
             },
             orderBy: [
                 { createdAt: 'desc' },
@@ -841,6 +839,98 @@ export async function getAllBook(req, res) {
     }
 }
 
+// export const getBookById = async (req, res) => {
+//     const { id } = req.params;
+//     try {
+//         const book = await prisma.book.findUnique({
+//             where: { id: parseInt(id) },
+//             include: {
+//                 bookMedia: true,
+//                 author: {
+//                     select: {
+//                         id: true,
+//                         fullname: true,
+//                         imageUrl: true
+//                     }
+//                 },
+//                 Purchase: {
+//                     include: {
+//                         user: { // Ensure you have a relation between Purchase and User in your Prisma schema
+//                             select: {
+//                                 id: true,
+//                                 fullname: true,
+//                                 imageUrl: true
+//                             }
+//                         }
+//                     }
+//                 },
+//                 books: {
+//                     include: {
+//                         category: true
+//                     }
+//                 }
+//             }
+//         });
+
+//         if (!book) {
+//             return res.status(404).json({
+//                 success: false,
+//                 message: "Book not found",
+//                 status: 404
+//             });
+//         }
+
+//         // Add base URL to book files
+//         book.coverImage = book.coverImage ? baseurl + "/books/" + book.coverImage : null;
+//         book.pdfUrl = book.pdfUrl ? baseurl + "/books/" + book.pdfUrl : null;
+//         book.audioUrl = book.audioUrl ? baseurl + "/books/" + book.audioUrl : null;
+
+//         // Add base URL to bookMedia files
+//         book.bookMedia = book.bookMedia.map((item) => ({
+//             ...item,
+//             mediaUrl: baseurl + "/books/" + item.mediaUrl
+//         }));
+
+//         // Add base URL to author image
+//         if (book.author?.imageUrl) {
+//             book.author.imageUrl = baseurl + "/author/" + book.author.imageUrl;
+//         }
+
+//         // Add base URL to user avatar in Purchase
+//         book.Purchase = book.Purchase.map((purchase) => {
+//             if (purchase.user) {
+//                 purchase.user.imageUrl = purchase.user.imageUrl
+//                     ? baseurl + "/users/" + purchase.user.imageUrl
+//                     : null;
+//             }
+//             return purchase;
+//         });
+
+//         const totalViews = await prisma.bookRead.count({
+//             where: { bookId: parseInt(id) }
+//         });
+
+//         book.totalViews = totalViews;
+
+//         return res.status(200).json({
+//             success: true,
+//             message: "Book retrieved successfully",
+//             status: 200,
+//             book
+//         });
+
+//     } catch (error) {
+//         console.error("Error fetching book:", error);
+//         return res.status(500).json({
+//             success: false,
+//             message: "Internal server error",
+//             status: 500,
+//             error: error.message
+//         });
+//     }
+// };
+
+
 export const getBookById = async (req, res) => {
     const { id } = req.params;
     try {
@@ -849,6 +939,17 @@ export const getBookById = async (req, res) => {
             include: {
                 bookMedia: true,
                 author: true,
+                Purchase: {
+                    include: {
+                        user: { // Ensure you have a relation between Purchase and User in your Prisma schema
+                            select: {
+                                id: true,
+                                fullName: true,
+                                avatar_url: true
+                            }
+                        }
+                    }
+                },
                 books: {
                     include: {
                         category: true
@@ -887,6 +988,16 @@ export const getBookById = async (req, res) => {
         const totalViews = await prisma.bookRead.count({
             where: { bookId: parseInt(id) }
         })
+
+        // Add base URL to user avatar in Purchase
+        book.Purchase = book.Purchase.map((purchase) => {
+            if (purchase.user) {
+                purchase.user.avatar_url = purchase.user.avatar_url
+                    ? baseurl + "/books/" + purchase.user.avatar_url
+                    : null;
+            }
+            return purchase;
+        });
 
         book.totalViews = totalViews
         // return false
@@ -1001,18 +1112,30 @@ export async function editProfile(req, res) {
 
 export const createBook = async (req, res) => {
     try {
-        const { title, categoryIds, price, costPrice, description, type, stock, authorId } = req.body;
+        let {
+            title,
+            categoryIds,
+            price,
+            costPrice,
+            description,
+            type,
+            isFree,
+        } = req.body;
+
+
+        if (isFree !== undefined) {
+            isFree = isFree === 'true';
+            req.body.isFree = isFree;
+        }
 
         const schema = Joi.object({
             title: Joi.string().required(),
             description: Joi.string().required(),
             categoryIds: Joi.string().required(),
-            price: Joi.number().required(),
+            price: Joi.number().optional(),
             type: Joi.number().required(),
-            costPrice: Joi.number().optional(),
-            stock: Joi.number().required(),
             isFree: Joi.boolean().optional(),
-            authorId: Joi.number().required(), // ✅ Validate authorId
+            costPrice: Joi.number().optional(),
         });
 
         const { error } = schema.validate(req.body);
@@ -1051,11 +1174,10 @@ export const createBook = async (req, res) => {
                 type: parseInt(type),
                 price: parseFloat(price),
                 costPrice: costPrice ? parseFloat(costPrice) : null,
-                stock: parseInt(stock),
                 description,
                 coverImage,
-                isFree,
-                authorId: parseInt(authorId), // ✅ Use passed authorId
+                isFree: isFree,
+                authorId: req.user.id,
                 pdfUrl,
                 audioUrl,
                 books: {
@@ -1078,9 +1200,9 @@ export const createBook = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "Book uploaded successfully on behalf of author",
+            message: "Book uploaded successfully",
             status: 200,
-            book: newBook
+            book: newBook,
         });
 
     } catch (error) {
@@ -1094,12 +1216,43 @@ export const createBook = async (req, res) => {
     }
 };
 
+export const getReview = async (req, res) => {
+    try {
+        // Assuming you get authorId from token middleware
+        const authorId = req.user.id;
 
+        const reviews = await prisma.review.findMany({
+            where: {
+                book: {
+                    authorId: authorId
+                }
+            },
+            include: {
+                book: true,
+                user: true
+            }
+        });
 
+        return res.status(200).json({
+            success: true,
+            message: "Fetched all reviews for author's books",
+            status: 200,
+            reviews
+        });
+
+    } catch (error) {
+        console.error("Error fetching reviews:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+            status: 500,
+            error: error.message,
+        });
+    }
+};
 // export const createBook = async (req, res) => {
 //     try {
-//         const { title, categoryIds, price, costPrice, description, type, stock } = req.body;
-
+//         const { title, categoryIds, price, costPrice, description, type, stock, isFree } = req.body;
 
 //         const schema = Joi.object({
 //             title: Joi.string().required(),
@@ -1107,6 +1260,7 @@ export const createBook = async (req, res) => {
 //             categoryIds: Joi.string().required(),
 //             price: Joi.number().required(),
 //             type: Joi.number().required(),
+//             isFree: Joi.boolean().optional(),
 //             costPrice: Joi.number().optional(),
 //             stock: Joi.number().required(),
 //         });
@@ -1121,8 +1275,6 @@ export const createBook = async (req, res) => {
 //         }
 
 //         const categoryIdsArray = categoryIds.split(',');
-
-//         console.log("categoryIdA", categoryIdsArray)
 
 //         let coverImage = null;
 //         let pdfUrl = null;
@@ -1152,6 +1304,7 @@ export const createBook = async (req, res) => {
 //                 stock: parseInt(stock),
 //                 description,
 //                 coverImage,
+//                 isFree,
 //                 authorId: req.user.id,
 //                 pdfUrl,
 //                 audioUrl,
@@ -1175,13 +1328,13 @@ export const createBook = async (req, res) => {
 
 //         return res.status(200).json({
 //             success: true,
-//             message: "Book Uploaded successfully",
+//             message: "Book uploaded successfully",
 //             status: 200,
 //             book: newBook
 //         });
 
 //     } catch (error) {
-//         console.error("Error fetching books:", error);
+//         console.error("Error uploading book:", error);
 //         return res.status(500).json({
 //             success: false,
 //             message: "Internal server error",
@@ -1189,39 +1342,48 @@ export const createBook = async (req, res) => {
 //             error: error.message,
 //         });
 //     }
-// }
+// };
 
 export const editBook = async (req, res) => {
-    const {
-        title, categoryIds, price, costPrice, type, description, stock, id,
-    } = req.body;
-
-
-    const schema = Joi.object({
-        title: Joi.string().optional(),
-        description: Joi.string().optional(),
-        categoryIds: Joi.string().optional(),
-        price: Joi.number().optional(),
-        costPrice: Joi.number().optional(),
-        stock: Joi.number().optional(),
-        type: Joi.number().optional(),
-        id: Joi.number().integer().required()
-    });
-
-    const { error } = schema.validate(req.body);
-    if (error) {
-        return res.status(400).json({
-            message: error.details.map(i => i.message).join(', '),
-            success: false,
-            status: 400,
-        });
-    }
-
     try {
-        // Find existing book
+        let {
+            title,
+            categoryIds,
+            price,
+            costPrice,
+            type,
+            description,
+            isFree,
+            id,
+        } = req.body;
+
+        if (isFree !== undefined) {
+            isFree = isFree === 'true';
+            req.body.isFree = isFree;
+        }
+
+        const schema = Joi.object({
+            id: Joi.number().integer().required(),
+            title: Joi.string().optional(),
+            description: Joi.string().optional(),
+            categoryIds: Joi.string().optional(),
+            price: Joi.number().optional(),
+            costPrice: Joi.number().optional(),
+            type: Joi.number().optional(),
+            isFree: Joi.boolean().optional(),
+        });
+
+        const { error } = schema.validate(req.body);
+        if (error) {
+            return res.status(400).json({
+                message: error.details.map((i) => i.message).join(', '),
+                success: false,
+                status: 400,
+            });
+        }
+
         const book = await prisma.book.findUnique({
             where: { id: parseInt(id) },
-            include: { bookMedia: true }
         });
 
         if (!book) {
@@ -1230,15 +1392,13 @@ export const editBook = async (req, res) => {
 
         let coverImage = book.coverImage;
         let pdfUrl = book.pdfUrl;
-
         let audioUrl = book.audioUrl;
 
         if (req.files) {
-            if (req.files["coverImage"]?.[0]) coverImage = req.files["coverImage"][0].filename;
-            if (req.files["pdfUrl"]?.[0]) pdfUrl = req.files["pdfUrl"][0].filename;
-            if (req.files["audioUrl"]?.[0]) audioUrl = req.files["audioUrl"][0].filename;
+            if (req.files["coverImage"]) coverImage = req.files["coverImage"][0].filename;
+            if (req.files["pdfUrl"]) pdfUrl = req.files["pdfUrl"][0].filename;
+            if (req.files["audioUrl"]) audioUrl = req.files["audioUrl"][0].filename;
         }
-
 
         const updateData = {
             title: title ?? book.title,
@@ -1246,7 +1406,7 @@ export const editBook = async (req, res) => {
             description: description ?? book.description,
             price: price !== undefined ? parseFloat(price) : book.price,
             costPrice: costPrice !== undefined ? parseFloat(costPrice) : book.costPrice,
-            stock: stock !== undefined ? parseInt(stock) : book.stock,
+            isFree: isFree !== undefined ? isFree : book.isFree,
             coverImage,
             pdfUrl,
             audioUrl,
@@ -1255,22 +1415,17 @@ export const editBook = async (req, res) => {
         const updatedBook = await prisma.book.update({
             where: { id: parseInt(id) },
             data: updateData,
-            include: { bookMedia: true }
         });
 
-
         if (req.files?.["bookMedia"]?.length > 0) {
-            const newMedia = req.files["bookMedia"].map(file => ({
+            const bookMediaFiles = req.files["bookMedia"].map((file) => ({
+                bookId: updatedBook.id,
                 mediaUrl: file.filename,
-                type: file.mimetype.startsWith("image/") ? "image"
-                    : file.mimetype.startsWith("audio/") ? "audio"
-                        : file.mimetype === "application/pdf" ? "pdf"
-                            : "other",
-                bookId: updatedBook.id
+                type: "image",
             }));
 
             await prisma.bookMedia.createMany({
-                data: newMedia
+                data: bookMediaFiles,
             });
         }
 
@@ -1291,15 +1446,14 @@ export const editBook = async (req, res) => {
 
         const finalBook = await prisma.book.findUnique({
             where: { id: parseInt(id) },
-            include: { bookMedia: true }
+            include: { bookMedia: true, books: true }
         });
-
 
         return res.status(200).json({
             success: true,
             message: "Book updated successfully",
             updatedBook: finalBook,
-            status: 200
+            status: 200,
         });
 
     } catch (err) {
@@ -1308,10 +1462,133 @@ export const editBook = async (req, res) => {
             success: false,
             message: "Internal server error",
             error: err.message,
-            status: 500
+            status: 500,
         });
     }
 };
+
+
+// export const editBook = async (req, res) => {
+//     const {
+//         title, categoryIds, price, costPrice, type, description, id,
+//     } = req.body;
+
+
+//     const schema = Joi.object({
+//         title: Joi.string().optional(),
+//         description: Joi.string().optional(),
+//         categoryIds: Joi.string().optional(),
+//         price: Joi.number().optional(),
+//         costPrice: Joi.number().optional(),
+//         stock: Joi.number().optional(),
+//         type: Joi.number().optional(),
+//         id: Joi.number().integer().required()
+//     });
+
+//     const { error } = schema.validate(req.body);
+//     if (error) {
+//         return res.status(400).json({
+//             message: error.details.map(i => i.message).join(', '),
+//             success: false,
+//             status: 400,
+//         });
+//     }
+
+//     try {
+//         // Find existing book
+//         const book = await prisma.book.findUnique({
+//             where: { id: parseInt(id) },
+//             include: { bookMedia: true }
+//         });
+
+//         if (!book) {
+//             return res.status(404).json({ success: false, message: 'Book not found' });
+//         }
+
+//         let coverImage = book.coverImage;
+//         let pdfUrl = book.pdfUrl;
+
+//         let audioUrl = book.audioUrl;
+
+//         if (req.files) {
+//             if (req.files["coverImage"]?.[0]) coverImage = req.files["coverImage"][0].filename;
+//             if (req.files["pdfUrl"]?.[0]) pdfUrl = req.files["pdfUrl"][0].filename;
+//             if (req.files["audioUrl"]?.[0]) audioUrl = req.files["audioUrl"][0].filename;
+//         }
+
+
+//         const updateData = {
+//             title: title ?? book.title,
+//             type: type ? parseInt(type) : book.type,
+//             description: description ?? book.description,
+//             price: price !== undefined ? parseFloat(price) : book.price,
+//             costPrice: costPrice !== undefined ? parseFloat(costPrice) : book.costPrice,
+//             stock: stock !== undefined ? parseInt(stock) : book.stock,
+//             coverImage,
+//             pdfUrl,
+//             audioUrl,
+//         };
+
+//         const updatedBook = await prisma.book.update({
+//             where: { id: parseInt(id) },
+//             data: updateData,
+//             include: { bookMedia: true }
+//         });
+
+
+//         if (req.files?.["bookMedia"]?.length > 0) {
+//             const newMedia = req.files["bookMedia"].map(file => ({
+//                 mediaUrl: file.filename,
+//                 type: file.mimetype.startsWith("image/") ? "image"
+//                     : file.mimetype.startsWith("audio/") ? "audio"
+//                         : file.mimetype === "application/pdf" ? "pdf"
+//                             : "other",
+//                 bookId: updatedBook.id
+//             }));
+
+//             await prisma.bookMedia.createMany({
+//                 data: newMedia
+//             });
+//         }
+
+//         if (categoryIds) {
+//             const categoryIdsArray = categoryIds.split(',').map(Number);
+
+//             await prisma.bookCategory.deleteMany({
+//                 where: { bookId: parseInt(id) }
+//             });
+
+//             await prisma.bookCategory.createMany({
+//                 data: categoryIdsArray.map(categoryId => ({
+//                     bookId: parseInt(id),
+//                     categoryId
+//                 }))
+//             });
+//         }
+
+//         const finalBook = await prisma.book.findUnique({
+//             where: { id: parseInt(id) },
+//             include: { bookMedia: true }
+//         });
+
+
+//         return res.status(200).json({
+//             success: true,
+//             message: "Book updated successfully",
+//             updatedBook: finalBook,
+//             status: 200
+//         });
+
+//     } catch (err) {
+//         console.error("Error updating book:", err);
+//         return res.status(500).json({
+//             success: false,
+//             message: "Internal server error",
+//             error: err.message,
+//             status: 500
+//         });
+//     }
+// };
 
 export const deleteBook = async (req, res) => {
     try {
@@ -1361,8 +1638,7 @@ export const deleteBook = async (req, res) => {
             error: error.message,
         });
     }
-}
-
+};
 
 export const deleteImage = async (req, res) => {
     try {
@@ -1415,8 +1691,6 @@ export const deleteImage = async (req, res) => {
     }
 };
 
-
-
 export const addToCart = async (req, res) => {
     const { userId, bookId, quantity } = req.body;
 
@@ -1460,7 +1734,7 @@ export const addToCart = async (req, res) => {
             error: error.message,
         });
     }
-}
+};
 
 export async function getAllCategories(req, res) {
     try {
@@ -1473,6 +1747,7 @@ export async function getAllCategories(req, res) {
                 },
             },
         });
+
         await Promise.all(
             categories.map(async (category) => {
                 await Promise.all(
@@ -1509,63 +1784,137 @@ export async function getAllCategories(req, res) {
             error: error.message,
         });
     }
-}
+};
 
 export const getdashboard = async (req, res) => {
     try {
         const authorId = req.user.id;
 
-        const bookIds = (await prisma.book.findMany({
-            where: {
-                authorId: authorId
-            }
-        })).map((item) => item.id)
+        // Get all book IDs of the author
+        const authorBooks = await prisma.book.findMany({
+            where: { authorId },
+            select: { id: true }
+        });
 
+        const bookIds = authorBooks.map(book => book.id);
+
+        // Total Views on Author's Books
         const totalViews = await prisma.bookRead.count({
-            where: {
-                bookId: {
-                    in: bookIds
-                }
-            }
+            where: { bookId: { in: bookIds } }
         });
 
         console.log('totalViews', totalViews)
 
-        const books = await prisma.book.count({
-            where: {
-                authorId: authorId
-            }
+        // Total Books Count
+        const totalBooks = authorBooks.length;
+
+        // Total Reviews on Author's Books
+        const totalReviews = await prisma.review.count({
+            where: { bookId: { in: bookIds } }
         });
 
-        console.log('books', books)
+        // Total Earnings from Purchases of Author's Books
+        const purchases = await prisma.purchase.findMany({
+            where: { bookId: { in: bookIds } },
+            select: { amount: true }
+        });
 
-        const totalEarning = 0
-        const review = await prisma.review.count({
-            where: {
-                userId: authorId
-            }
-        })
+        console.log("Book IDs:", bookIds);
 
-        console.log('review', review)
+
+        console.log('purchases', purchases)
+
+        const totalEarning = purchases.reduce((sum, p) => sum + p.amount, 0);
+
+        console.log('totalEarning', totalEarning)
+
+        // Optional: Held Amount logic (if you use it)
+        const heldAmountResult = await prisma.purchase.aggregate({
+            where: { bookId: { in: bookIds }, isHeld: true },
+            _sum: { amount: true }
+        });
+
+        const heldAmount = heldAmountResult._sum.amount || 0;
 
         return res.status(200).json({
             success: true,
             message: "Dashboard retrieved successfully",
             status: 200,
-            totalViews, books,
-            review, totalEarning
+            data: {
+                totalViews,
+                totalBooks,
+                totalReviews,
+                totalEarning,
+                heldAmount
+            }
         });
 
     } catch (error) {
-        console.log('error', error)
+        console.error('Dashboard Error:', error);
         return res.status(500).json({
             success: false,
             message: "Internal server error",
             status: 500,
-            error
+            error: error.message
         });
     }
 };
+
+// export const getdashboard = async (req, res) => {
+//     try {
+//         const authorId = req.user.id;
+
+//         const bookIds = (await prisma.book.findMany({
+//             where: {
+//                 authorId: authorId
+//             }
+//         })).map((item) => item.id)
+
+//         const totalViews = await prisma.bookRead.count({
+//             where: {
+//                 bookId: {
+//                     in: bookIds
+//                 }
+//             }
+//         });
+
+//         console.log('totalViews', totalViews)
+
+//         const books = await prisma.book.count({
+//             where: {
+//                 authorId: authorId
+//             }
+//         });
+
+//         console.log('books', books)
+
+//         const totalEarning = 0
+//         const review = await prisma.review.count({
+//             where: {
+//                 userId: authorId
+//             }
+//         })
+
+//         console.log('review', review)
+
+//         return res.status(200).json({
+//             success: true,
+//             message: "Dashboard retrieved successfully",
+//             status: 200,
+//             totalViews, books,
+//             review, totalEarning
+//         });
+
+//     } catch (error) {
+//         console.log('error', error)
+//         return res.status(500).json({
+//             success: false,
+//             message: "Internal server error",
+//             status: 500,
+//             error
+//         });
+//     }
+// };
 
 export async function getAllAuthorNotification(req, res) {
     try {
@@ -1684,7 +2033,7 @@ export async function deleteAllNotification(req, res) {
             error: error.message
         });
     }
-}
+};
 
 // export async function getAllFollwedUser(req, res) {
 //     try {
@@ -1768,10 +2117,7 @@ export async function getAllFollwedUser(req, res) {
             error: error.message,
         });
     }
-}
-
-
-
+};
 
 export async function createOrGetAOneOnOneChat(req, res) {
     const { receiverId } = req.params;
@@ -1955,8 +2301,6 @@ export async function getAllChats(req, res) {
         return createErrorResponse(res, 500, MessageEnum.INTERNAL_SERVER_ERROR);
     }
 };
-
-
 
 // export async function getAllChats(req, res) {
 //     try {
@@ -2869,7 +3213,6 @@ export async function createOrGetAOneOnOneChatInUser(req, res) {
     }
 }
 
-
 export async function getAllMessages(req, res) {
     try {
         const { chatId } = req.params;
@@ -2978,7 +3321,6 @@ export async function getAllMessages(req, res) {
         });
     }
 }
-
 
 // export async function getAllMessages(req, res) {
 //     try {
@@ -3625,7 +3967,6 @@ export const getSessionById = async (req, res) => {
     }
 };
 
-
 export const scheduleLiveSession = async (req, res) => {
     const { title, date, time } = req.body;
 
@@ -3800,7 +4141,6 @@ export const getSessionDashboard = async (req, res) => {
         });
     }
 };
-
 
 // export const editSession = async (req, res) => {
 
@@ -4035,7 +4375,6 @@ export const editSession = async (req, res) => {
     }
 };
 
-
 export async function deleteSession(req, res) {
     try {
         let { sessionId } = req.params;
@@ -4080,7 +4419,6 @@ export async function deleteSession(req, res) {
     }
 }
 
-
 export async function generateLiveStreamToken(req, res) {
     try {
         const { roomName, userName } = req.body;
@@ -4112,51 +4450,9 @@ export async function generateLiveStreamToken(req, res) {
     }
 }
 
-// export const subscribe_to_author = async (req, res) => {
-//     try {
-//         const { plan_id } = req.body;
-
-//         // Get author_id from token (middleware should set req.user)
-//         const authorId = req.user.id
-
-//         if (!plan_id) {
-//             return res.status(400).json({ status: false, message: 'plan_id is required.' });
-//         }
-
-//         const plan = await prisma.plan.findUnique({ where: { id: Number(plan_id) } });
-
-//         if (!plan) {
-//             return res.status(404).json({ status: false, message: 'Plan not found.' });
-//         }
-
-//         // Create PaymentIntent
-//         const paymentIntent = await stripe.paymentIntents.create({
-//             amount: Math.round(plan.price * 100),
-//             currency: 'usd',
-//             payment_method_types: ['card'],
-//             metadata: {
-//                 authorId,
-//                 plan_id,
-//                 plan_name: plan.name
-//             }
-//         });
-
-//         res.status(200).json({
-//             status: true,
-//             clientSecret: paymentIntent.client_secret,
-//             message: `Payment initiated for ${plan.name}. Complete the payment to activate subscription.`
-//         });
-
-//     } catch (error) {
-//         console.error(error);
-//         res.status(500).json({ status: false, message: 'Subscription failed.', error: error.message });
-//     }
-// };
-//subscription
-
 export const createSubscriptionSession = async (req, res) => {
     try {
-        const { plan_id } = req.body;
+        const { plan_id, success_url, cancel_url } = req.body;
 
         // Get authorId from token (middleware should set req.user)
         const authorId = req.user.id;
@@ -4172,10 +4468,14 @@ export const createSubscriptionSession = async (req, res) => {
             return res.status(404).json({ status: false, message: 'Plan not found.' });
         }
 
+        // Validate URLs or fallback to default
+        const successUrl = success_url || `${process.env.FRONTEND_URL}/success`;
+        const cancelUrl = cancel_url || `${process.env.FRONTEND_URL}/cancel`;
+
         // Create Stripe Checkout session for one-time payment
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
-            mode: 'payment', // 'subscription' if recurring
+            mode: 'payment',
             line_items: [
                 {
                     price_data: {
@@ -4183,169 +4483,341 @@ export const createSubscriptionSession = async (req, res) => {
                         product_data: {
                             name: `Author Subscription (${plan.name.replace('_', ' ')})`,
                         },
-                        unit_amount: Math.round(plan.price * 100), // convert to cents
+                        unit_amount: Math.round(plan.price * 100),
                     },
                     quantity: 1,
                 },
             ],
-            metadata: { authorId: authorId.toString(), plan_id: plan.id.toString() },
-            success_url: `${process.env.FRONTEND_URL}/success`,
-            cancel_url: `${process.env.FRONTEND_URL}/cancel`,
+            metadata: {
+                authorId: authorId.toString(),
+                plan_id: plan.id.toString(),
+            },
+            success_url: successUrl,
+            cancel_url: cancelUrl,
         });
 
         res.status(200).json({ status: true, url: session.url });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ status: false, message: 'Failed to create subscription session.', error: error.message });
+        res.status(500).json({
+            status: false,
+            message: 'Failed to create subscription session.',
+            error: error.message,
+        });
     }
 };
+
+// export const createSubscriptionSession = async (req, res) => {
+//     try {
+//         const { plan_id } = req.body;
+
+//         // Get authorId from token (middleware should set req.user)
+//         const authorId = req.user.id;
+
+//         if (!plan_id) {
+//             return res.status(400).json({ status: false, message: 'plan_id is required.' });
+//         }
+
+//         // Fetch the plan from DB
+//         const plan = await prisma.plan.findUnique({ where: { id: Number(plan_id) } });
+
+//         if (!plan) {
+//             return res.status(404).json({ status: false, message: 'Plan not found.' });
+//         }
+
+//         // Create Stripe Checkout session for one-time payment
+//         const session = await stripe.checkout.sessions.create({
+//             payment_method_types: ['card'],
+//             mode: 'payment', // 'subscription' if recurring
+//             line_items: [
+//                 {
+//                     price_data: {
+//                         currency: 'usd',
+//                         product_data: {
+//                             name: `Author Subscription (${plan.name.replace('_', ' ')})`,
+//                         },
+//                         unit_amount: Math.round(plan.price * 100), // convert to cents
+//                     },
+//                     quantity: 1,
+//                 },
+//             ],
+//             metadata: { authorId: authorId.toString(), plan_id: plan.id.toString() },
+//             success_url: `${process.env.FRONTEND_URL}/success`,
+//             cancel_url: `${process.env.FRONTEND_URL}/cancel`,
+//         });
+
+//         res.status(200).json({ status: true, url: session.url });
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).json({ status: false, message: 'Failed to create subscription session.', error: error.message });
+//     }
+// };
 
 export const onboard_author = async (req, res) => {
-  try {
-    const {
-      user_id,
-      firstName,
-      lastName,
-      dob, // YYYY-MM-DD
-      emailAddress,
-      phoneNumber, // must be in E.164 format e.g. +1234567890
-      residentialAddress,
-      postal_code,
-      city,
-      state,
-      account_holder_name,
-      routing_number, // Use routing_number instead of swift_code for US banks
-      account_number
-    } = req.body;
+    try {
+        const {
+            user_id,
+            firstName,
+            lastName,
+            dob, // YYYY-MM-DD
+            emailAddress,
+            phoneNumber, // must be in E.164 format e.g. +1234567890
+            residentialAddress,
+            postal_code,
+            city,
+            state,
+            account_holder_name,
+            routing_number, // Use routing_number instead of swift_code for US banks
+            account_number
+        } = req.body;
 
-    if (
-      !user_id ||
-      !firstName ||
-      !lastName ||
-      !dob ||
-      !emailAddress ||
-      !phoneNumber ||
-      !residentialAddress ||
-      !postal_code ||
-      !city ||
-      !state ||
-      !account_holder_name ||
-      !routing_number ||
-      !account_number
-    ) {
-      return res.status(400).json({
-        status: false,
-        message: "All fields are required",
-      });
+        if (
+            !user_id ||
+            !firstName ||
+            !lastName ||
+            !dob ||
+            !emailAddress ||
+            !phoneNumber ||
+            !residentialAddress ||
+            !postal_code ||
+            !city ||
+            !state ||
+            !account_holder_name ||
+            !routing_number ||
+            !account_number
+        ) {
+            return res.status(400).json({
+                status: false,
+                message: "All fields are required",
+            });
+        }
+
+        // Create bank account token (for US only)
+        const bankAccountToken = await stripe.tokens.create({
+            bank_account: {
+                country: 'US',        // Make sure this matches the user's bank country
+                currency: 'usd',
+                account_holder_name,
+                account_holder_type: 'individual',
+                routing_number,
+                account_number,
+            },
+        });
+
+        // Create a Standard account (change country if needed)
+        const account = await stripe.accounts.create({
+            type: 'standard',
+            country: 'US',       // Change to 'IN' or appropriate country if needed
+            email: emailAddress,
+        });
+
+        // Create account onboarding link so user can finish KYC
+        const accountLink = await stripe.accountLinks.create({
+            account: account.id,
+            refresh_url: 'https://your-frontend.com/onboarding/refresh', // your URL to retry onboarding
+            return_url: 'https://your-frontend.com/onboarding/success',  // your success URL after onboarding
+            type: 'account_onboarding',
+        });
+
+        // Create a Stripe customer for author
+        const customer = await stripe.customers.create({
+            name: `${firstName} ${lastName}`,
+            email: emailAddress,
+            description: 'Author account for receiving payments',
+        });
+
+        // Prepare bank info object
+        const bank_info = {
+            firstName,
+            lastName,
+            dob,
+            emailAddress,
+            phoneNumber,
+            residentialAddress,
+            postal_code,
+            city,
+            state,
+            account_holder_name,
+            routing_number,
+            account_number,
+        };
+
+        // Find author by user_id
+        const author = await prisma.author.findUnique({
+            where: { id: Number(user_id) },
+        });
+
+        if (!author) {
+            return res.status(404).json({
+                status: false,
+                message: "Author not found",
+            });
+        }
+
+        // Delete existing bank info for this author (if any)
+        await prisma.bankInfo.deleteMany({
+            where: { authorId: author.id },
+        });
+
+        // Add new bank info linked to author
+        const newBankInfo = await prisma.bankInfo.create({
+            data: {
+                accountId: account.id,
+                customerId: customer.id,
+                bankInfo: bank_info,
+                author: { connect: { id: author.id } },
+            },
+        });
+
+        // Send back onboarding URL so author can complete onboarding on Stripe
+        return res.status(200).json({
+            status: true,
+            message: 'Author onboarded successfully. Please complete onboarding.',
+            onboarding_url: accountLink.url,
+            data: {
+                accountId: account.id,
+                customerId: customer.id,
+                bankInfoId: newBankInfo.id,
+            },
+        });
+
+    } catch (error) {
+        if (error.type === 'StripeInvalidRequestError') {
+            return res.status(400).json({
+                status: false,
+                message: error.message,
+                param: error.param,
+                code: error.code,
+                doc_url: error.doc_url,
+                request_log_url: error.raw?.request_log_url || null,
+            });
+        }
+        console.error('Error onboarding author:', error);
+        return res.status(500).json({
+            status: false,
+            message: 'Internal Server Error',
+        });
     }
-
-    // Create bank account token (for US only)
-    const bankAccountToken = await stripe.tokens.create({
-      bank_account: {
-        country: 'US',        // Make sure this matches the user's bank country
-        currency: 'usd',
-        account_holder_name,
-        account_holder_type: 'individual',
-        routing_number,
-        account_number,
-      },
-    });
-
-    // Create a Standard account (change country if needed)
-    const account = await stripe.accounts.create({
-      type: 'standard',
-      country: 'US',       // Change to 'IN' or appropriate country if needed
-      email: emailAddress,
-    });
-
-    // Create account onboarding link so user can finish KYC
-    const accountLink = await stripe.accountLinks.create({
-      account: account.id,
-      refresh_url: 'https://your-frontend.com/onboarding/refresh', // your URL to retry onboarding
-      return_url: 'https://your-frontend.com/onboarding/success',  // your success URL after onboarding
-      type: 'account_onboarding',
-    });
-
-    // Create a Stripe customer for author
-    const customer = await stripe.customers.create({
-      name: `${firstName} ${lastName}`,
-      email: emailAddress,
-      description: 'Author account for receiving payments',
-    });
-
-    // Prepare bank info object
-    const bank_info = {
-      firstName,
-      lastName,
-      dob,
-      emailAddress,
-      phoneNumber,
-      residentialAddress,
-      postal_code,
-      city,
-      state,
-      account_holder_name,
-      routing_number,
-      account_number,
-    };
-
-    // Find author by user_id
-    const author = await prisma.author.findUnique({
-      where: { id: Number(user_id) },
-    });
-
-    if (!author) {
-      return res.status(404).json({
-        status: false,
-        message: "Author not found",
-      });
-    }
-
-    // Delete existing bank info for this author (if any)
-    await prisma.bankInfo.deleteMany({
-      where: { authorId: author.id },
-    });
-
-    // Add new bank info linked to author
-    const newBankInfo = await prisma.bankInfo.create({
-      data: {
-        accountId: account.id,
-        customerId: customer.id,
-        bankInfo: bank_info,
-        author: { connect: { id: author.id } },
-      },
-    });
-
-    // Send back onboarding URL so author can complete onboarding on Stripe
-    return res.status(200).json({
-      status: true,
-      message: 'Author onboarded successfully. Please complete onboarding.',
-      onboarding_url: accountLink.url,
-      data: {
-        accountId: account.id,
-        customerId: customer.id,
-        bankInfoId: newBankInfo.id,
-      },
-    });
-
-  } catch (error) {
-    if (error.type === 'StripeInvalidRequestError') {
-      return res.status(400).json({
-        status: false,
-        message: error.message,
-        param: error.param,
-        code: error.code,
-        doc_url: error.doc_url,
-        request_log_url: error.raw?.request_log_url || null,
-      });
-    }
-    console.error('Error onboarding author:', error);
-    return res.status(500).json({
-      status: false,
-      message: 'Internal Server Error',
-    });
-  }
 };
+
+export async function getPlans(req, res) {
+    try {
+        const plans = await prisma.plan.findMany({
+            orderBy: { id: "asc" },
+        });
+
+        return res.status(200).json({
+            status: 200,
+            message: 'Get All Plans',
+            success: true,
+            plans
+        });
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            status: 500,
+            message: 'Internal Server Error',
+            success: false,
+            error: error.message
+        });
+    }
+};
+
+export async function getMyPlans(req, res) {
+    try {
+        const authorId = req.user.id;
+
+        // Find active subscription for this author
+        const activeSubscription = await prisma.subscription.findFirst({
+            where: {
+                authorId,
+                status: 'active',
+                endDate: {
+                    gt: new Date(), // subscription still valid (not expired)
+                },
+            },
+            include: {
+                plan: true, // include plan details
+            },
+            orderBy: {
+                endDate: 'desc', // get latest active subscription
+            },
+        });
+
+        if (!activeSubscription) {
+            return res.status(404).json({
+                status: 404,
+                success: false,
+                message: "No active subscription found for this author",
+                plan: null,
+            });
+        }
+
+        return res.status(200).json({
+            status: 200,
+            success: true,
+            message: "Active subscription plan retrieved",
+            subscription: activeSubscription,
+            plan: activeSubscription.plan,
+        });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            status: 500,
+            success: false,
+            message: "Internal Server Error",
+            error: error.message,
+        });
+    }
+};
+
+export const getSubscriptionStatus = async (req, res) => {
+    const authorId = req.user.id;
+
+    const subscription = await prisma.subscription.findFirst({
+        where: { authorId, status: 'active' },
+        include: { plan: true },
+    });
+
+    if (!subscription) {
+        return res.json({ subscribed: false });
+    }
+
+    res.json({
+        subscribed: true,
+        plan: subscription.plan.name,
+        endsAt: subscription.endsAt,
+    });
+};
+
+export const getAuthorEarnings = async (req, res) => {
+    try {
+        const { authorId } = req.params;
+
+        const earnings = await prisma.order.aggregate({
+            _sum: { authorEarning: true },
+            where: { authorId: parseInt(authorId), status: 'paid' },
+        });
+
+        return res.status(200).json({
+            status: 200,
+            message: 'Order Fetched successfully',
+            earnings: earnings._sum.authorEarning || 0,
+            order
+        });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            status: 500,
+            message: 'Internal Server Error',
+            success: false,
+            error: error.message,
+        });
+    }
+};
+
+
 
 // export const onboard_author = async (req, res) => {
 //     try {

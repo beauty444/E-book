@@ -30,6 +30,8 @@ import {
     editBook,
     deleteImage,
     addAuthor,
+    getPlans,
+    getAdminSalesSummary
 } from '../controllers/adminController.js';
 import { upload } from "../middlewares/upload.js";
 import { adminAuth } from "../middlewares/adminAuth.js";
@@ -122,5 +124,9 @@ adminRoutes.post('/addAuthor', adminAuth, upload.fields([
     { name: 'avatar_url', maxCount: 1 },
     { name: 'coverImage', maxCount: 1 },
 ]), addAuthor);
+
+adminRoutes.get('/allPlans', adminAuth, getPlans);
+
+adminRoutes.get('/getAdminSalesSummary', adminAuth, getAdminSalesSummary);
 
 // adminRoutes.post('/overrideBookPrice/:bookId', adminAuth, overrideBookPrice);

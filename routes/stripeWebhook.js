@@ -264,40 +264,158 @@ stripeWebhookRouter.post(
         const amount = session.amount_total ? session.amount_total / 100 : 0;
 
         // 🎯 Handle Subscription Purchase
+        // if (metadata.plan_id && metadata.authorId) {
+        //   const authorId = parseInt(metadata.authorId);
+        //   const planId = parseInt(metadata.plan_id);
+
+        //   const plan = await prisma.plan.findUnique({
+        //     where: { id: planId },
+        //   });
+
+        //   if (!plan) throw new Error("Plan not found");
+
+        //   const now = new Date();
+        //   let extendedDate = new Date(now);
+
+        //   // Adjust duration based on plan
+        //   if (planId === 1) {
+        //     extendedDate.setMonth(extendedDate.getMonth() + 6); // Plan 1: 6 months
+        //   } else if (planId === 2) {
+        //     extendedDate.setMonth(extendedDate.getMonth() + 12); // Plan 2: 12 months
+        //   } else {
+        //     throw new Error("Invalid plan ID");
+        //   }
+
+        //   // Update author's subscription date
+        //   await prisma.author.update({
+        //     where: { id: authorId },
+        //     data: { subscribedUntil: extendedDate },
+        //   });
+
+        //   // Create subscription entry
+        //   await prisma.subscription.create({
+        //     data: {
+        //       authorId,
+        //       planId,
+        //       status: 'active',
+        //       startDate: new Date(),
+        //       endDate: extendedDate,
+        //     },
+        //   });
+
+        //   // Create transaction entry
+        //   await prisma.transaction.create({
+        //     data: {
+        //       type: 'SUBSCRIPTION',
+        //       authorId,
+        //       amount, // make sure amount is defined
+        //       stripeRef: session.id,
+        //       status: 'completed',
+        //     },
+        //   });
+
+        //   console.log(`✅ Subscription completed for Author ID: ${authorId}`);
+        // }
+
         if (metadata.plan_id && metadata.authorId) {
           const authorId = parseInt(metadata.authorId);
           const planId = parseInt(metadata.plan_id);
 
-          const now = new Date();
-          const extendedDate = new Date(now.setMonth(now.getMonth() + 6)); // Adjust as per actual plan logic
-
-          await prisma.author.update({
-            where: { id: authorId },
-            data: { subscribedUntil: extendedDate },
+          const plan = await prisma.plan.findUnique({
+            where: { id: planId },
           });
+          if (!plan) throw new Error("Plan not found");
 
-          await prisma.subscription.create({
-            data: {
+          const now = new Date();
+
+          // Calculate new end date based on the plan duration
+          let newEndDate = new Date();
+          newEndDate.setMonth(newEndDate.getMonth() + (planId === 1 ? 6 : planId === 2 ? 12 : 0));
+          if (newEndDate.getTime() === now.getTime()) {
+            throw new Error("Invalid plan duration");
+          }
+
+          // Fetch existing active subscription for this author
+          const existingSubscription = await prisma.subscription.findFirst({
+            where: {
               authorId,
-              planId,
               status: 'active',
-              startDate: new Date(),
-              endDate: extendedDate,
+            },
+            orderBy: {
+              endDate: 'desc',
             },
           });
 
+          let startDate = new Date();
+
+          if (existingSubscription) {
+            startDate = existingSubscription.startDate;
+
+            // If current subscription end date is in the future, check upgrade
+            if (existingSubscription.endDate > now) {
+              // Only upgrade if the new plan's end date is later than the current end date
+              if (newEndDate > existingSubscription.endDate) {
+                // Extend end date
+                await prisma.subscription.update({
+                  where: { id: existingSubscription.id },
+                  data: { endDate: newEndDate, planId },
+                });
+
+                await prisma.author.update({
+                  where: { id: authorId },
+                  data: { subscribedUntil: newEndDate },
+                });
+              }
+              // Else no update needed, user already has equal or longer subscription
+            } else {
+              // Subscription expired, create a new subscription starting now
+              await prisma.subscription.create({
+                data: {
+                  authorId,
+                  planId,
+                  status: 'active',
+                  startDate: now,
+                  endDate: newEndDate,
+                },
+              });
+
+              await prisma.author.update({
+                where: { id: authorId },
+                data: { subscribedUntil: newEndDate },
+              });
+            }
+          } else {
+            // No existing subscription, create a new one
+            await prisma.subscription.create({
+              data: {
+                authorId,
+                planId,
+                status: 'active',
+                startDate: now,
+                endDate: newEndDate,
+              },
+            });
+
+            await prisma.author.update({
+              where: { id: authorId },
+              data: { subscribedUntil: newEndDate },
+            });
+          }
+
+          // Record the transaction anyway
           await prisma.transaction.create({
             data: {
               type: 'SUBSCRIPTION',
               authorId,
-              amount,
+              amount,  // ensure amount is defined earlier
               stripeRef: session.id,
               status: 'completed',
             },
           });
 
-          console.log(`✅ Subscription completed for Author ID: ${authorId}`);
+          console.log(`✅ Subscription processed for Author ID: ${authorId}`);
         }
+
 
         // 🎯 Handle Book Purchase
         if (metadata.bookId && metadata.userId && metadata.authorId) {
