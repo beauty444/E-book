@@ -1495,6 +1495,7 @@ export async function getAllfavBook(req, res) {
                 userId: req.user.id
             },
             include: {
+                Purchase: true,
                 book: true,
                 user: true
             }

@@ -57,6 +57,8 @@ model User {
   ContactIssue       ContactIssue[]
   Transaction        Transaction[]
   Purchase           Purchase[]
+
+  Order Order[]
 }
 
 model Review {
@@ -132,12 +134,12 @@ model AuthorNotification {
 }
 
 model Plan {
-  id           Int            @id @default(autoincrement())
-  name         String
-  duration     String
-  price        Float
-  features     Json           // Store features as a JSON array
-  createdAt    DateTime       @default(now())
+  id            Int            @id @default(autoincrement())
+  name          String
+  duration      String
+  price         Float
+  features      Json // Store features as a JSON array
+  createdAt     DateTime       @default(now())
   subscriptions Subscription[]
 }
 
@@ -157,9 +159,9 @@ model Order {
   status           String   @default("paid")
   createdAt        DateTime @default(now())
 
-  user             User     @relation(fields: [userId], references: [id])
-  book             Book     @relation(fields: [bookId], references: [id])
-  author           Author   @relation(fields: [authorId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+  book   Book   @relation(fields: [bookId], references: [id])
+  author Author @relation(fields: [authorId], references: [id])
 }
 
 model Subscription {
@@ -240,6 +242,8 @@ model Author {
   BankInfo           BankInfo[]
   Subscription       Subscription[]
   Purchase           Purchase[]
+
+  Order Order[]
 }
 
 model BankInfo {
@@ -270,16 +274,18 @@ model Transaction {
 }
 
 model Purchase {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  bookId    Int
-  authorId  Int  
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  bookId     Int
+  favoriteId Int
+  authorId   Int
   isHeld     Boolean  @default(false)
-  amount    Float
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id])
-  book      Book     @relation(fields: [bookId], references: [id])
-  author    Author   @relation(fields: [authorId], references: [id])  
+  amount     Float
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+  book       Book     @relation(fields: [bookId], references: [id])
+  author     Author   @relation(fields: [authorId], references: [id])
+  favorite   Favorite @relation(fields: [favoriteId], references: [id])
 }
 
 model Book {
@@ -309,6 +315,8 @@ model Book {
   BookRead    BookRead[]
   Transaction Transaction[]
   Purchase    Purchase[]
+
+  Order Order[]
 }
 
 model BookRead {
@@ -342,8 +350,9 @@ model Favorite {
   bookId    Int
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book     Book       @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  Purchase Purchase[]
 
   @@unique([userId, bookId])
 }
