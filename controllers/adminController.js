@@ -2115,3 +2115,60 @@ export const getAdminSalesSummary = async (req, res) => {
 //     });
 //   }
 // };
+
+
+export const getAllSubscription = async (req, res) => {
+    try {
+        const subscription = await prisma.subscription.findMany({
+            include: {
+                plan: true,
+                author: true
+            }
+        })
+
+        return res.status(200).json({
+            status: 200,
+            message: 'Get All Plans',
+            success: true,
+            data: subscription,
+        });
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            status: 500,
+            message: 'Internal Server Error',
+            success: false,
+            error: error.message
+        });
+    }
+}
+
+export const getAllAdminEarningByCreatedAuthor = async (req, res) => {
+    try {
+        const earning = await prisma.purchase.findMany({
+            where: {
+                author: {
+                    isCreatedByAdmin: true
+                }
+            },
+            include: {
+                author: true
+            }
+        })
+
+        return res.status(200).json({
+            status: 200,
+            message: 'Get All Plans',
+            success: true,
+            data: earning,
+        });
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            status: 500,
+            message: 'Internal Server Error',
+            success: false,
+            error: error.message
+        });
+    }
+}

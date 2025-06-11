@@ -32,7 +32,8 @@ import {
     addAuthor,
     getAllPurchase,
     getPlans,
-    getAdminSalesSummary
+    getAdminSalesSummary,
+    getAllSubscription
 } from '../controllers/adminController.js';
 import { upload } from "../middlewares/upload.js";
 import { adminAuth } from "../middlewares/adminAuth.js";
@@ -131,5 +132,7 @@ adminRoutes.get('/getAllPurchase', adminAuth, getAllPurchase);
 adminRoutes.get('/allPlans', adminAuth, getPlans);
 
 adminRoutes.get('/getAdminSalesSummary', adminAuth, getAdminSalesSummary);
+
+adminRoutes.get('/getAllSubscription', adminAuth,getAllSubscription)
 
 // adminRoutes.post('/overrideBookPrice/:bookId', adminAuth, overrideBookPrice);
