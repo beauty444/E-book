@@ -1261,9 +1261,6 @@ export const getReview = async (req, res) => {
                 : {}),
         };
 
-        const totalCount = await prisma.review.count({
-            where: filterConditions
-        })
 
         const reviews = await prisma.review.findMany({
             where: filterConditions,
@@ -1283,7 +1280,7 @@ export const getReview = async (req, res) => {
             message: "Fetched reviews with filters & pagination",
             status: 200,
             reviews,
-            totalCount
+            totalCount: reviews.length
         });
 
     } catch (error) {
@@ -4902,8 +4899,7 @@ export const getAllPurchase = async (req, res) => {
             orderBy: { createdAt: 'desc' },
         });
 
-        const totalCount = await prisma.user.count({
-            where: filterQuery
+        const totalCount = await prisma.purchase.count({
         })
 
 
@@ -4927,7 +4923,7 @@ export const getAllPurchase = async (req, res) => {
             status: 200,
             message: 'Purchases fetched successfully for author',
             purchases: transformedPurchases,
-            totalCount,
+            totalCount: purchases.length,
         });
     } catch (error) {
         console.error("Error fetching author's purchases:", error);

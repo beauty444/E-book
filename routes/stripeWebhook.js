@@ -224,6 +224,35 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import express from 'express';
 import Stripe from 'stripe';
 import dotenv from 'dotenv';
@@ -263,59 +292,6 @@ stripeWebhookRouter.post(
 
         const amount = session.amount_total ? session.amount_total / 100 : 0;
 
-        // 🎯 Handle Subscription Purchase
-        // if (metadata.plan_id && metadata.authorId) {
-        //   const authorId = parseInt(metadata.authorId);
-        //   const planId = parseInt(metadata.plan_id);
-
-        //   const plan = await prisma.plan.findUnique({
-        //     where: { id: planId },
-        //   });
-
-        //   if (!plan) throw new Error("Plan not found");
-
-        //   const now = new Date();
-        //   let extendedDate = new Date(now);
-
-        //   // Adjust duration based on plan
-        //   if (planId === 1) {
-        //     extendedDate.setMonth(extendedDate.getMonth() + 6); // Plan 1: 6 months
-        //   } else if (planId === 2) {
-        //     extendedDate.setMonth(extendedDate.getMonth() + 12); // Plan 2: 12 months
-        //   } else {
-        //     throw new Error("Invalid plan ID");
-        //   }
-
-        //   // Update author's subscription date
-        //   await prisma.author.update({
-        //     where: { id: authorId },
-        //     data: { subscribedUntil: extendedDate },
-        //   });
-
-        //   // Create subscription entry
-        //   await prisma.subscription.create({
-        //     data: {
-        //       authorId,
-        //       planId,
-        //       status: 'active',
-        //       startDate: new Date(),
-        //       endDate: extendedDate,
-        //     },
-        //   });
-
-        //   // Create transaction entry
-        //   await prisma.transaction.create({
-        //     data: {
-        //       type: 'SUBSCRIPTION',
-        //       authorId,
-        //       amount, // make sure amount is defined
-        //       stripeRef: session.id,
-        //       status: 'completed',
-        //     },
-        //   });
-
-        //   console.log(`✅ Subscription completed for Author ID: ${authorId}`);
-        // }
 
         if (metadata.plan_id && metadata.authorId) {
           const authorId = parseInt(metadata.authorId);
@@ -373,6 +349,7 @@ stripeWebhookRouter.post(
                 data: {
                   authorId,
                   planId,
+                  amount,
                   status: 'active',
                   startDate: now,
                   endDate: newEndDate,
@@ -401,17 +378,6 @@ stripeWebhookRouter.post(
               data: { subscribedUntil: newEndDate },
             });
           }
-
-          // Record the transaction anyway
-          await prisma.transaction.create({
-            data: {
-              type: 'SUBSCRIPTION',
-              authorId,
-              amount,  // ensure amount is defined earlier
-              stripeRef: session.id,
-              status: 'completed',
-            },
-          });
 
           console.log(`✅ Subscription processed for Author ID: ${authorId}`);
         }
@@ -489,56 +455,6 @@ stripeWebhookRouter.post(
         }
       }
       // ... (rest of your webhook code, including account.updated logic)
-
-      // ✅ Handle Stripe Account Updated
-      if (type === 'account.updated') {
-        const account = data.object;
-
-        if (account.charges_enabled) {
-          await prisma.author.updateMany({
-            where: { stripeAccountId: account.id },
-            data: { onboardingComplete: true },
-          });
-
-          console.log(`✅ Onboarding complete for Stripe Account ID: ${account.id}`);
-
-          // 🔁 Release held purchases for this author
-          const author = await prisma.author.findFirst({
-            where: { stripeAccountId: account.id },
-          });
-
-          if (author) {
-            const heldPurchases = await prisma.purchase.findMany({
-              where: {
-                authorId: author.id,
-                isHeld: true,
-              },
-            });
-
-            for (const purchase of heldPurchases) {
-              try {
-                await stripe.transfers.create({
-                  amount: Math.round(purchase.amount * 100),
-                  currency: 'usd',
-                  destination: account.id,
-                  metadata: {
-                    original_purchase_id: purchase.id.toString(),
-                  },
-                });
-
-                await prisma.purchase.update({
-                  where: { id: purchase.id },
-                  data: { isHeld: false },
-                });
-
-                console.log(`✅ Released held purchase ID ${purchase.id} to author ${author.id}`);
-              } catch (err) {
-                console.error(`❌ Failed to release funds for purchase ID ${purchase.id}:`, err.message);
-              }
-            }
-          }
-        }
-      }
       res.status(200).json({ received: true });
     } catch (err) {
       console.error('❌ Webhook processing error:', err.message);

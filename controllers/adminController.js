@@ -1997,10 +1997,6 @@ export const getAllPurchase = async (req, res) => {
             },
         });
 
-        const totalCount = await prisma.purchase.count({
-            where: filterConditions
-        })
-
         const updatedPurchases = purchases.map((purchase) => {
             if (purchase.book) {
                 purchase.book.coverImage = purchase.book.coverImage
@@ -2018,7 +2014,7 @@ export const getAllPurchase = async (req, res) => {
             status: 200,
             message: 'Purchase records fetched successfully',
             purchases: updatedPurchases,
-            totalCount
+            totalCount: purchases.length 
         });
 
     } catch (error) {
