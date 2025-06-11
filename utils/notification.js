@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
-import admin from '../utils/firebaseAdmin.js';
+// import admin from '../utils/firebaseAdmin.js';
 
 
 export async function sendNotificationRelateToFollow(params) {

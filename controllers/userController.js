@@ -3322,7 +3322,6 @@ export const anonymousContactIssue = async (req, res) => {
     }
 };
 
-
 export const purchaseBook = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -3337,73 +3336,64 @@ export const purchaseBook = async (req, res) => {
             return res.status(404).json({ error: 'Book not found.' });
         }
 
-
+        // Free book flow
         if (book.isFree) {
-            const existing = await prisma.purchase.findFirst({
-                where: { userId, bookId },
+
+            await prisma.purchase.create({
+                data: {
+                    userId,
+                    bookId,
+                    authorId: book.authorId,
+                    price: 0,
+                    isHeld: false,
+                },
             });
-
-            if (!existing) {
-                await prisma.purchase.create({
-                    data: {
-                        userId,
-                        bookId,
-                        amount: 0,
-                        isHeld: false,
-                    },
-                });
-            }
-
-            return res.status(200).json({ message: 'Book added to your library (free).' });
+            return res.status(200).json({ message: 'Book added successfully.', status: 200, success: true });
         }
 
         const author = book.author;
-        let isOnboarded = false;
-
-        if (author?.stripeAccountId) {
-            const account = await stripe.accounts.retrieve(author.stripeAccountId);
-            if (account.charges_enabled && account.payouts_enabled) {
-                isOnboarded = true;
-            }
-        }
-
-        const lineItem = {
-            price_data: {
-                currency: 'usd',
-                product_data: {
-                    name: book.title,
-                },
-                unit_amount: Math.round(book.price * 100),
-            },
-            quantity: 1,
-        };
-
-        const metadata = {
-            userId: userId.toString(),
-            bookId: book.id.toString(),
-            authorId: author?.id?.toString() || '',
-            isOnboarded: isOnboarded.toString(),
-        };
-
-        const sessionParams = {
+        const priceInCents = Math.round(book.price * 100);
+        let sessionParams = {
             payment_method_types: ['card'],
             mode: 'payment',
-            line_items: [lineItem],
-            metadata,
+            line_items: [{
+                price_data: {
+                    currency: 'usd',
+                    product_data: { name: book.title },
+                    unit_amount: priceInCents,
+                },
+                quantity: 1,
+            }],
+            metadata: {
+                userId: userId.toString(),
+                bookId: book.id.toString(),
+                authorId: author?.id?.toString() || '',
+                isCreatedByAdmin: author?.isCreatedByAdmin ? 'true' : 'false',
+            },
             success_url: success_url,
             cancel_url: cancel_url,
         };
 
-        if (isOnboarded) {
+        // Paid book logic starts
+        if (author?.isCreatedByAdmin) {
+
+        } else if (author?.stripeAccountId) {
+            // Normal author flow → split 90% to author, 10% to platform
+            const platformFee = Math.round(priceInCents * 0.10);
+            const authorAmount = priceInCents - platformFee;
+
             sessionParams.payment_intent_data = {
-                application_fee_amount: 0,
+                application_fee_amount: platformFee,
                 transfer_data: {
                     destination: author.stripeAccountId,
                 },
             };
         }
+        // Else: author has no stripeAccountId → full amount goes to platform
+        // No transfer_data applied automatically (Stripe default)
 
         const session = await stripe.checkout.sessions.create(sessionParams);
+
         return res.status(200).json({
             status: 200,
             sessionUrl: session.url
@@ -3419,6 +3409,7 @@ export const purchaseBook = async (req, res) => {
         });
     }
 };
+
 
 
 export const createOrder = async (req, res) => {
@@ -3557,110 +3548,5 @@ export const updateOrder = async (req, res) => {
     }
 };
 
-
-
-// export const purchaseBook = async (req, res) => {
-//     try {
-//         const userId = req.user.id;
-//         const { bookId } = req.body;
-
-//         const book = await prisma.book.findUnique({
-//             where: { id: bookId },
-//             include: { author: true },
-//         });
-
-//         if (!book) {
-//             return res.status(404).json({ error: 'Book not found.' });
-//         }
-
-//         // ✅ FREE BOOK: Grant access immediately
-//         if (book.isFree) {
-//             // Check if user already has the book
-//             const existing = await prisma.purchase.findFirst({
-//                 where: { userId, bookId },
-//             });
-
-//             console.log('book.isFree', book.isFree)
-
-//             if (!existing) {
-//                 await prisma.purchase.create({
-//                     data: {
-//                         userId,
-//                         bookId,
-//                         amount: 0,
-//                         isHeld: false,
-//                     },
-//                 });
-//             }
-
-//             return res.status(200).json({ message: 'Book added to your library (free).' });
-//         }
-
-//         const author = book.author;
-
-//         let isOnboarded = false;
-
-//         // ✅ Check author's Stripe status
-//         if (author?.stripeAccountId) {
-//             const account = await stripe.accounts.retrieve(author.stripeAccountId);
-
-//             if (account.charges_enabled && account.payouts_enabled) {
-//                 isOnboarded = true;
-//             }
-//         }
-
-//         const lineItem = {
-//             price_data: {
-//                 currency: 'usd',
-//                 product_data: {
-//                     name: book.title,
-//                 },
-//                 unit_amount: Math.round(book.price * 100),
-//             },
-//             quantity: 1,
-//         };
-
-//         const metadata = {
-//             userId: userId.toString(),
-//             bookId: book.id.toString(),
-//             authorId: author?.id?.toString() || '',
-//             isOnboarded: isOnboarded.toString(),
-//         };
-
-//         const sessionParams = {
-//             payment_method_types: ['card'],
-//             mode: 'payment',
-//             line_items: [lineItem],
-//             metadata,
-//             success_url: `${process.env.FRONTEND_URL}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
-//             cancel_url: `${process.env.FRONTEND_URL}/book/${book.id}`,
-//         };
-
-
-//         // ✅ Route earnings if author is onboarded
-//         if (isOnboarded) {
-//             sessionParams.payment_intent_data = {
-//                 application_fee_amount: 0, // add your platform fee here
-//                 transfer_data: {
-//                     destination: author.stripeAccountId,
-//                 },
-//             };
-//         }
-
-//         const session = await stripe.checkout.sessions.create(sessionParams);
-//         return res.status(200).json({
-//             status: 200,
-//             sessionUrl: session.url
-//         });
-//     } catch (error) {
-//         console.log(error);
-//         return res.status(500).json({
-//             status: 500,
-//             message: 'Internal Server Error',
-//             success: false,
-//             error: error
-//         });
-//     }
-// }
 
 
