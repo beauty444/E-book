@@ -1580,20 +1580,24 @@ export const createBook = async (req, res) => {
 
 export const editBook = async (req, res) => {
     const {
-        title, categoryIds, price, costPrice, type, description, stock, id, authorId
+        title, categoryIds, price, costPrice, type, description, id, authorId, isFree
     } = req.body;
 
+    if (isFree !== undefined) {
+        isFree = isFree === 'true';
+        req.body.isFree = isFree;
+    }
 
     const schema = Joi.object({
+        id: Joi.number().integer().required(),
         title: Joi.string().optional(),
         description: Joi.string().optional(),
         categoryIds: Joi.string().optional(),
         price: Joi.number().optional(),
         costPrice: Joi.number().optional(),
-        stock: Joi.number().optional(),
         authorId: Joi.number().optional(),
         type: Joi.number().optional(),
-        id: Joi.number().integer().required()
+        isFree: Joi.boolean().optional(),
     });
 
     const { error } = schema.validate(req.body);
@@ -1634,8 +1638,8 @@ export const editBook = async (req, res) => {
             description: description ?? book.description,
             price: price !== undefined ? parseFloat(price) : book.price,
             costPrice: costPrice !== undefined ? parseFloat(costPrice) : book.costPrice,
-            stock: stock !== undefined ? parseInt(stock) : book.stock,
             authorId: authorId !== undefined ? parseInt(authorId) : book.authorId,
+            isFree: isFree !== undefined ? isFree : book.isFree,
             coverImage,
             pdfUrl,
             audioUrl,
@@ -1993,6 +1997,10 @@ export const getAllPurchase = async (req, res) => {
             },
         });
 
+        const totalCount = await prisma.purchase.count({
+            where: filterConditions
+        })
+
         const updatedPurchases = purchases.map((purchase) => {
             if (purchase.book) {
                 purchase.book.coverImage = purchase.book.coverImage
@@ -2010,6 +2018,7 @@ export const getAllPurchase = async (req, res) => {
             status: 200,
             message: 'Purchase records fetched successfully',
             purchases: updatedPurchases,
+            totalCount
         });
 
     } catch (error) {
