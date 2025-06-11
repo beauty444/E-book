@@ -84,6 +84,7 @@ import { chatRouter } from './routes/chatRoutes.js';
 import stripeWebhookRouter from './routes/stripeWebhook.js'; // ✅ default export
 
 import { initializeSocketIO } from './utils/socket.js';
+import { onboardingRouter } from './routes/onboardingRouter.js';
 
 dotenv.config();
 
@@ -112,6 +113,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/author', authorRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/payment', paymentRouter);
+app.use('/api/onboarding', onboardingRouter);
 
 // Root route
 app.get('/', (req, res) => {

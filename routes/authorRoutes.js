@@ -49,7 +49,8 @@ import {
     getMyPlans,
     getSubscriptionStatus,
     getReview,
-    getAuthorEarnings
+    getAllPurchase,
+    getAuthorEarnings,
 } from '../controllers/authorController.js';
 import { upload } from "../middlewares/upload.js";
 import { authorAuth } from "../middlewares/authorAuth.js";
@@ -154,6 +155,8 @@ authorRouter.get('/allPlans', authorAuth, getPlans);
 authorRouter.get('/getMyPlans', authorAuth, getMyPlans);
 
 authorRouter.get('/subscription/status', authorAuth, getSubscriptionStatus);
+
+authorRouter.get('/getAllPurchase', authorAuth, getAllPurchase);
 
 authorRouter.get('/getAuthorEarnings/status', authorAuth, getAuthorEarnings);
 //chat 

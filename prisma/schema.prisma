@@ -274,18 +274,25 @@ model Transaction {
 }
 
 model Purchase {
-  id         Int      @id @default(autoincrement())
-  userId     Int
-  bookId     Int
-  favoriteId Int
-  authorId   Int
-  isHeld     Boolean  @default(false)
-  amount     Float
-  createdAt  DateTime @default(now())
-  user       User     @relation(fields: [userId], references: [id])
-  book       Book     @relation(fields: [bookId], references: [id])
-  author     Author   @relation(fields: [authorId], references: [id])
-  favorite   Favorite @relation(fields: [favoriteId], references: [id])
+  id               Int      @id @default(autoincrement())
+  purchaseId       String   @unique
+  userId           Int
+  bookId           Int
+  authorId         Int
+  price            Float
+  costPrice        Float?
+  quantity         Int      @default(1)
+  discount         Float?
+  commissionAmount Float?
+  authorEarning    Float?
+  paymentMethod    String?
+  status           String   @default("paid")
+  isHeld           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  user   User?   @relation(fields: [userId], references: [id])
+  book   Book?   @relation(fields: [bookId], references: [id])
+  author Author? @relation(fields: [authorId], references: [id])
 }
 
 model Book {
@@ -350,9 +357,8 @@ model Favorite {
   bookId    Int
   createdAt DateTime @default(now())
 
-  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  book     Book       @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  Purchase Purchase[]
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
 
   @@unique([userId, bookId])
 }

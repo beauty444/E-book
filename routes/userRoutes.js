@@ -48,7 +48,7 @@ import {
     updateContactIssue,
     anonymousContactIssue,
     createOrder,
-    getAllOrder,
+    getAllPurchase,
     getAllOrderById,
     updateOrder
 } from '../controllers/userController.js';
@@ -140,7 +140,7 @@ userRouter.post('/purchaseBook', auth, purchaseBook);
 
 userRouter.post('/createOrder', auth, createOrder);
 
-userRouter.post('/getAllOrder', auth, getAllOrder);
+userRouter.get('/getAllPurchase', auth, getAllPurchase);
 
 userRouter.post('/getAllOrder/:id', auth, getAllOrderById);
 

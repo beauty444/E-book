@@ -30,6 +30,7 @@ import {
     editBook,
     deleteImage,
     addAuthor,
+    getAllPurchase,
     getPlans,
     getAdminSalesSummary
 } from '../controllers/adminController.js';
@@ -124,6 +125,8 @@ adminRoutes.post('/addAuthor', adminAuth, upload.fields([
     { name: 'avatar_url', maxCount: 1 },
     { name: 'coverImage', maxCount: 1 },
 ]), addAuthor);
+
+adminRoutes.get('/getAllPurchase', adminAuth, getAllPurchase);
 
 adminRoutes.get('/allPlans', adminAuth, getPlans);
 

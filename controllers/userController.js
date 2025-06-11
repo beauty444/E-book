@@ -1488,6 +1488,45 @@ export async function favOrUnFavBook(req, res) {
 //     }
 // }
 
+// export async function getAllfavBook(req, res) {
+//     try {
+//         const favBooks = await prisma.favorite.findMany({
+//             where: {
+//                 userId: req.user.id
+//             },
+//             include: {
+//                 book: true,
+//                 user: true
+//             }
+//         });
+
+//         console.log('favBooks', favBooks)
+
+//         favBooks.map(fav => {
+//             if (fav.book) {
+//                 fav.book.coverImage = fav.book.coverImage ? baseurl + "/books/" + fav.book.coverImage : null;
+//                 fav.book.pdfUrl = fav.book.pdfUrl ? baseurl + "/books/" + fav.book.pdfUrl : null;
+//                 fav.book.audioUrl = fav.book.audioUrl ? baseurl + "/books/" + fav.book.audioUrl : null;
+//             }
+//         });
+
+//         return res.status(200).json({
+//             success: true,
+//             message: "Books retrieved successfully",
+//             status: 200,
+//             favBooks
+//         });
+//     } catch (error) {
+//         console.error("Error fetching books:", error);
+//         return res.status(500).json({
+//             success: false,
+//             message: "Internal server error",
+//             status: 500,
+//             error: error.message,
+//         });
+//     }
+// }
+
 export async function getAllfavBook(req, res) {
     try {
         const favBooks = await prisma.favorite.findMany({
@@ -1495,30 +1534,57 @@ export async function getAllfavBook(req, res) {
                 userId: req.user.id
             },
             include: {
-                Purchase: true,
-                book: true,
-                user: true
+                book: {
+                    include: {
+                        Purchase: {
+                            where: {
+                                userId: req.user.id
+                            },
+                            orderBy: {
+                                createdAt: 'desc'
+                            },
+                            take: 1
+                        }
+                    }
+                },
+                user: true,
             }
         });
 
-        console.log('favBooks', favBooks)
+        console.log('favBooks with purchases:', JSON.stringify(favBooks, null, 2)); // Use JSON.stringify for better logging of complex objects
 
         favBooks.map(fav => {
+            // Process book URLs
             if (fav.book) {
                 fav.book.coverImage = fav.book.coverImage ? baseurl + "/books/" + fav.book.coverImage : null;
                 fav.book.pdfUrl = fav.book.pdfUrl ? baseurl + "/books/" + fav.book.pdfUrl : null;
                 fav.book.audioUrl = fav.book.audioUrl ? baseurl + "/books/" + fav.book.audioUrl : null;
+
+                // Optionally process Purchase URLs if any book-level purchases are included
+                // This logic depends on whether Purchase model also has file paths that need baseurl
+                // For example, if Purchase model has an 'invoiceUrl'
+                // fav.book.Purchase.forEach(purchase => {
+                //     if (purchase.invoiceUrl) {
+                //         purchase.invoiceUrl = baseurl + "/invoices/" + purchase.invoiceUrl;
+                //     }
+                // });
+            }
+
+            // Process the specific purchase linked directly to the Favorite (if purchasesId is set)
+            if (fav.purchase) {
+                // If your Purchase model has any file URLs that need baseurl
+                // fav.purchase.someFileUrl = fav.purchase.someFileUrl ? baseurl + "/somepath/" + fav.purchase.someFileUrl : null;
             }
         });
 
         return res.status(200).json({
             success: true,
-            message: "Books retrieved successfully",
+            message: "Favorite books and associated purchase data retrieved successfully",
             status: 200,
             favBooks
         });
     } catch (error) {
-        console.error("Error fetching books:", error);
+        console.error("Error fetching favorite books with purchase data:", error);
         return res.status(500).json({
             success: false,
             message: "Internal server error",
@@ -1527,7 +1593,6 @@ export async function getAllfavBook(req, res) {
         });
     }
 }
-
 export async function followedAuthor(req, res) {
     try {
         const followedAuthor = await prisma.follow.findMany({
@@ -3497,17 +3562,30 @@ export const createOrder = async (req, res) => {
     }
 };
 
-export const getAllOrder = async (req, res) => {
+export const getAllPurchase = async (req, res) => {
     try {
-        const orders = await prisma.order.findMany({
+
+        const userId = req.user.id;
+        console.log('userId', userId)
+
+        const purchases = await prisma.purchase.findMany({
+            where: {
+                userId: userId,
+            },
             include: { user: true, book: true, author: true },
             orderBy: { createdAt: 'desc' },
         });
 
+
+        await Promise.all(purchases.map(async (purchase) => {
+            purchase.book.coverImage = purchase.book.coverImage ? baseurl + "/books" + purchase.book.coverImage : null;
+            purchase.book.pdfUrl = purchase.book.pdfUrl ? baseurl + "/books" + purchase.book.pdfUrl : null;
+        }));
+
         return res.status(200).json({
             status: 200,
             message: 'Order Fetched successfully',
-            orders
+            purchases
         });
 
     } catch (error) {
