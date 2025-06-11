@@ -18,8 +18,6 @@ import { ChatEventEnum } from '../utils/constants.js';
 import { createErrorResponse, createSuccessResponse } from '../utils/responseUtil.js';
 import { MessageEnum } from '../config/message.js';
 import { sendNotificationRelateToQaSessionToUser, createNotificationForUser } from "../utils/notification.js";
-import Stripe from 'stripe';
-dotenv.config();
 
 
 const prisma = new PrismaClient();
@@ -735,12 +733,20 @@ export async function myProfile(req, res) {
         if (user.coverImage) {
             user.coverImage = `${baseurl}/books/${user.coverImage}`;
         }
+        let onboardingCompleted = false
+
+        if (user.stripeAccountId) {
+            const accountDetails = await stripe.accounts.retrieve(user.stripeAccountId);
+            if (accountDetails.charges_enabled && accountDetails.payouts_enabled) {
+                onboardingCompleted = true
+            }
+        }
 
         return res.status(200).json({
             status: 200,
             message: 'My Profile Data',
             success: true,
-            user: { ...user, publishedCount, followersCount }
+            user: { ...user, publishedCount, followersCount,onboardingCompleted }
         });
 
     } catch (error) {
@@ -1250,6 +1256,7 @@ export const getReview = async (req, res) => {
         });
     }
 };
+
 // export const createBook = async (req, res) => {
 //     try {
 //         const { title, categoryIds, price, costPrice, description, type, stock, isFree } = req.body;
