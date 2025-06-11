@@ -1261,6 +1261,7 @@ export const getReview = async (req, res) => {
                 : {}),
         };
 
+
         const reviews = await prisma.review.findMany({
             where: filterConditions,
             skip,
@@ -1279,6 +1280,7 @@ export const getReview = async (req, res) => {
             message: "Fetched reviews with filters & pagination",
             status: 200,
             reviews,
+            totalCount: reviews.length
         });
 
     } catch (error) {
@@ -4897,6 +4899,9 @@ export const getAllPurchase = async (req, res) => {
             orderBy: { createdAt: 'desc' },
         });
 
+        const totalCount = await prisma.purchase.count({
+        })
+
 
         const transformedPurchases = purchases.map((purchase) => {
             if (purchase.book) {
@@ -4918,6 +4923,7 @@ export const getAllPurchase = async (req, res) => {
             status: 200,
             message: 'Purchases fetched successfully for author',
             purchases: transformedPurchases,
+            totalCount: purchases.length,
         });
     } catch (error) {
         console.error("Error fetching author's purchases:", error);
