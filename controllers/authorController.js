@@ -941,7 +941,7 @@ export const getBookById = async (req, res) => {
                 author: true,
                 Purchase: {
                     include: {
-                        user: { // Ensure you have a relation between Purchase and User in your Prisma schema
+                        user: {
                             select: {
                                 id: true,
                                 fullName: true,
@@ -1216,28 +1216,63 @@ export const createBook = async (req, res) => {
     }
 };
 
+
 export const getReview = async (req, res) => {
     try {
-        // Assuming you get authorId from token middleware
         const authorId = req.user.id;
 
-        const reviews = await prisma.review.findMany({
-            where: {
-                book: {
-                    authorId: authorId
-                }
+        const {
+            search,
+            page = 1,
+            limit = 10,
+            startDate,
+            endDate,
+            rating,
+        } = req.query;
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const take = parseInt(limit);
+
+        const filterConditions = {
+            book: {
+                authorId: authorId,
+                ...(search && {
+                    title: {
+                        contains: search,
+                    },
+                }),
             },
+            ...(rating && {
+                rating: parseFloat(rating),
+            }),
+            ...(startDate || endDate
+                ? {
+                    createdAt: {
+                        ...(startDate && { gte: new Date(startDate) }),
+                        ...(endDate && { lte: new Date(endDate) }),
+                    },
+                }
+                : {}),
+        };
+
+        const reviews = await prisma.review.findMany({
+            where: filterConditions,
+            skip,
+            take,
             include: {
                 book: true,
-                user: true
-            }
+                user: true,
+            },
+            orderBy: {
+                createdAt: 'desc',
+            },
         });
 
         return res.status(200).json({
             success: true,
-            message: "Fetched all reviews for author's books",
+            message: "Fetched reviews with filters & pagination",
             status: 200,
-            reviews
+            reviews,
         });
 
     } catch (error) {
@@ -1250,6 +1285,42 @@ export const getReview = async (req, res) => {
         });
     }
 };
+
+
+// export const getReview = async (req, res) => {
+//     try {
+
+//         const authorId = req.user.id;
+
+//         const reviews = await prisma.review.findMany({
+//             where: {
+//                 book: {
+//                     authorId: authorId
+//                 }
+//             },
+//             include: {
+//                 book: true,
+//                 user: true
+//             }
+//         });
+
+//         return res.status(200).json({
+//             success: true,
+//             message: "Fetched all reviews for author's books",
+//             status: 200,
+//             reviews
+//         });
+
+//     } catch (error) {
+//         console.error("Error fetching reviews:", error);
+//         return res.status(500).json({
+//             success: false,
+//             message: "Internal server error",
+//             status: 500,
+//             error: error.message,
+//         });
+//     }
+// };
 // export const createBook = async (req, res) => {
 //     try {
 //         const { title, categoryIds, price, costPrice, description, type, stock, isFree } = req.body;
@@ -4789,6 +4860,72 @@ export const getSubscriptionStatus = async (req, res) => {
         endsAt: subscription.endsAt,
     });
 };
+
+export const getAllPurchase = async (req, res) => {
+    try {
+
+        const authorId = req.user.id;
+        console.log('authorId', authorId)
+
+        const {
+            page = 1,
+            limit = 10,
+        } = req.query;
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const take = parseInt(limit);
+
+
+        const purchases = await prisma.purchase.findMany({
+            where: {
+                book: {
+                    authorId: authorId,
+                },
+            },
+            skip,
+            take,
+            include: {
+                user: true,
+                book: true,
+                author: true,
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+
+        const transformedPurchases = purchases.map((purchase) => {
+            if (purchase.book) {
+
+                purchase.book.coverImage = purchase.book.coverImage
+                    ? `${baseurl}/books/${purchase.book.coverImage}`
+                    : null;
+                purchase.book.pdfUrl = purchase.book.pdfUrl
+                    ? `${baseurl}/books/${purchase.book.pdfUrl}`
+                    : null;
+                purchase.book.audioUrl = purchase.book.audioUrl
+                    ? `${baseurl}/books/${purchase.book.audioUrl}`
+                    : null;
+            }
+            return purchase;
+        });
+
+        return res.status(200).json({
+            status: 200,
+            message: 'Purchases fetched successfully for author',
+            purchases: transformedPurchases,
+        });
+    } catch (error) {
+        console.error("Error fetching author's purchases:", error);
+        return res.status(500).json({
+            status: 500,
+            message: 'Internal Server Error',
+            success: false,
+            error: error.message,
+        });
+    }
+};
+
+
 
 export const getAuthorEarnings = async (req, res) => {
     try {

@@ -1481,18 +1481,24 @@ export const updateContactIssue = async (req, res) => {
 
 export const createBook = async (req, res) => {
     try {
-        const { title, categoryIds, price, costPrice, description, type, stock, authorId } = req.body;
+        let { title, categoryIds, price, costPrice, description, type, isFree, authorId } = req.body;
+
+        if (isFree !== undefined) {
+            isFree = isFree === 'true';
+            req.body.isFree = isFree;
+        }
 
         const schema = Joi.object({
             title: Joi.string().required(),
             description: Joi.string().required(),
             categoryIds: Joi.string().required(),
-            price: Joi.number().required(),
+            price: Joi.number().optional(),
             type: Joi.number().required(),
+            isFree: Joi.boolean().optional(),
             costPrice: Joi.number().optional(),
-            stock: Joi.number().required(),
             authorId: Joi.number().required(),
         });
+
 
         const { error } = schema.validate(req.body);
         if (error) {
@@ -1530,9 +1536,9 @@ export const createBook = async (req, res) => {
                 type: parseInt(type),
                 price: parseFloat(price),
                 costPrice: costPrice ? parseFloat(costPrice) : null,
-                stock: parseInt(stock),
                 description,
                 coverImage,
+                isFree: isFree,
                 authorId: parseInt(authorId),
                 pdfUrl,
                 audioUrl,
@@ -1929,6 +1935,93 @@ export async function addAuthor(req, res) {
         });
     }
 }
+
+export const getAllPurchase = async (req, res) => {
+    try {
+
+        const {
+            search,
+            page = 1,
+            limit = 10,
+            bookName,
+            authorName,
+        } = req.query;
+
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const take = parseInt(limit);
+
+
+        const filterConditions = {
+            ...(search && {
+                OR: [
+                    {
+                        book: {
+                            is: {
+                                title: {
+                                    contains: search,
+                                },
+                            },
+                        },
+                    },
+                    {
+                        author: {
+                            is: {
+                                fullName: {
+                                    contains: search,
+                                },
+                            },
+                        },
+                    },
+                ],
+            }),
+        };
+
+
+
+        const purchases = await prisma.purchase.findMany({
+            where: filterConditions,
+            skip,
+            take,
+            include: {
+                user: true,
+                book: true,
+                author: true,
+            },
+            orderBy: {
+                createdAt: 'desc',
+            },
+        });
+
+        const updatedPurchases = purchases.map((purchase) => {
+            if (purchase.book) {
+                purchase.book.coverImage = purchase.book.coverImage
+                    ? `${baseurl}/books/${purchase.book.coverImage}`
+                    : null;
+
+                purchase.book.pdfUrl = purchase.book.pdfUrl
+                    ? `${baseurl}/books/${purchase.book.pdfUrl}`
+                    : null;
+            }
+            return purchase;
+        });
+
+        return res.status(200).json({
+            status: 200,
+            message: 'Purchase records fetched successfully',
+            purchases: updatedPurchases,
+        });
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            status: 500,
+            message: 'Internal Server Error',
+            success: false,
+            error: error.message,
+        });
+    }
+};
 
 export async function getPlans(req, res) {
     try {

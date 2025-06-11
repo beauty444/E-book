@@ -416,37 +416,79 @@ stripeWebhookRouter.post(
           console.log(`✅ Subscription processed for Author ID: ${authorId}`);
         }
 
-
-        // 🎯 Handle Book Purchase
-        if (metadata.bookId && metadata.userId && metadata.authorId) {
+        // 🎯 Handle Book Purchase (charge.succeeded type)
+        if (metadata && metadata.bookId && metadata.userId && metadata.authorId) {
           const userId = parseInt(metadata.userId);
           const bookId = parseInt(metadata.bookId);
           const authorId = parseInt(metadata.authorId);
-          const isOnboarded = metadata.isOnboarded === 'true';
+          const isOnboarded = metadata.isOnboarded === 'true'; // Convert string to boolean
 
-          const existing = await prisma.purchase.findFirst({
-            where: { userId, bookId },
+          // amount_total is in cents, needs division by 100
+          const totalAmountPaid = parseFloat((session.amount_total / 100).toFixed(2));
+
+          // Validate parsed amount
+          if (isNaN(totalAmountPaid) || totalAmountPaid <= 0) {
+            console.error(`❌ Error: Invalid or zero amount received from Stripe webhook for Checkout Session ID: ${session.id}. Amount: ${session.amount_total}`);
+            return res.status(400).send(`Invalid or zero amount received.`);
+          }
+
+          const book = await prisma.book.findUnique({
+            where: { id: bookId },
+            select: { price: true }
           });
 
-          if (!existing) {
+          if (!book) {
+            console.error(`❌ Error: Book with ID ${bookId} not found for Checkout Session ID: ${session.id}`);
+            return res.status(400).send(`Book with ID ${bookId} not found.`);
+          }
+
+          const ADMIN_COMMISSION_RATE = 0.10; // 10%
+          const commissionAmount = parseFloat((totalAmountPaid * ADMIN_COMMISSION_RATE).toFixed(2));
+          const authorEarning = parseFloat((totalAmountPaid - commissionAmount).toFixed(2));
+
+          // Idempotency Check: Use payment_intent ID for checkout.session.completed
+          // This is the most reliable way to ensure a purchase is not duplicated.
+          const existingPurchase = await prisma.purchase.findFirst({
+            where: {
+              // Assuming you add a field like 'stripePaymentIntentId: String?' to your Purchase model
+              // and store session.payment_intent there.
+              // stripePaymentIntentId: session.payment_intent, // Uncomment if you add this field to your model
+              // Fallback if no stripePaymentIntentId:
+              userId: userId,
+              bookId: bookId,
+              status: 'paid'
+            },
+          });
+
+          if (!existingPurchase) {
+            const newPurchaseId = `PUR-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+
             await prisma.purchase.create({
               data: {
-                userId,
-                bookId,
-                amount,
-                authorId,
+                purchaseId: newPurchaseId,
+                price: totalAmountPaid,
+                commissionAmount: commissionAmount,
+                authorEarning: authorEarning,
                 isHeld: !isOnboarded,
+                status: 'paid',
+                quantity: parseInt(metadata.quantity || '1'), // Assume quantity from metadata, default to 1
+                // payment_method_types will be an array, you might want to pick the first one or generalize
+                paymentMethod: session.payment_method_types[0] || 'unknown',
+                user: { connect: { id: userId } },
+                book: { connect: { id: bookId } },
+                author: { connect: { id: authorId } },
+                // stripePaymentIntentId: session.payment_intent, // Uncomment if you add this field to your model
               },
             });
-
             console.log(
               isOnboarded
-                ? `✅ Book purchased, earnings routed to author ${authorId}`
-                : `⚠️ Book purchased, earnings held (author ${authorId} not onboarded)`
+                ? `✅ Book purchased, earnings routed to author ${authorId}. Author earning: ${authorEarning.toFixed(2)}, Admin commission: ${commissionAmount.toFixed(2)}`
+                : `⚠️ Book purchased, earnings held (author ${authorId} not onboarded). Author earning: ${authorEarning.toFixed(2)}, Admin commission: ${commissionAmount.toFixed(2)}`
             );
           }
         }
       }
+      // ... (rest of your webhook code, including account.updated logic)
 
       // ✅ Handle Stripe Account Updated
       if (type === 'account.updated') {
