@@ -3339,7 +3339,7 @@ export const purchaseBook = async (req, res) => {
         // Free book flow
         if (book.isFree) {
 
-            await prisma.purchase.create({
+       const book = await prisma.purchase.create({
                 data: {
                     userId,
                     bookId,
@@ -3348,6 +3348,8 @@ export const purchaseBook = async (req, res) => {
                     isHeld: false,
                 },
             });
+
+            console.log('book', book)
             return res.status(200).json({ message: 'Book added successfully.', status: 200, success: true });
         }
 

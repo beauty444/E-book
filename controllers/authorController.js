@@ -746,7 +746,7 @@ export async function myProfile(req, res) {
             status: 200,
             message: 'My Profile Data',
             success: true,
-            user: { ...user, publishedCount, followersCount,onboardingCompleted }
+            user: { ...user, publishedCount, followersCount, onboardingCompleted }
         });
 
     } catch (error) {
@@ -946,6 +946,9 @@ export const getBookById = async (req, res) => {
                 bookMedia: true,
                 author: true,
                 Purchase: {
+                    orderBy: {
+                        createdAt: 'desc'
+                    },
                     include: {
                         user: {
                             select: {
@@ -956,6 +959,7 @@ export const getBookById = async (req, res) => {
                         }
                     }
                 },
+
                 books: {
                     include: {
                         category: true
@@ -991,9 +995,22 @@ export const getBookById = async (req, res) => {
             booksMedia = []
         }
 
+        const favorite = await prisma.favorite.count({
+            where: { bookId: parseInt(id) }
+        });
+        book.favorite = favorite;
+
         const totalViews = await prisma.bookRead.count({
             where: { bookId: parseInt(id) }
         })
+
+        const earnings = await prisma.purchase.aggregate({
+            where: { bookId: parseInt(id), status: 'paid' },
+            _sum: {
+                authorEarning: true
+            }
+        });
+        book.totalEarnings = earnings._sum.authorEarning || 0;
 
         // Add base URL to user avatar in Purchase
         book.Purchase = book.Purchase.map((purchase) => {
