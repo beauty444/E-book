@@ -168,7 +168,7 @@ model Subscription {
   id        Int       @id @default(autoincrement())
   authorId  Int
   planId    Int
-  amount    String?
+  amount    Float?
   status    String    @default("active") // active, cancelled, expired
   startDate DateTime  @default(now())
   endDate   DateTime?

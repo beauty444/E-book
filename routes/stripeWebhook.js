@@ -257,6 +257,7 @@ import express from 'express';
 import Stripe from 'stripe';
 import dotenv from 'dotenv';
 import prisma from '../utils/prismaClient.js';
+import { createNotificationForAuthor, createNotificationForUser, sendNotificationRelateToPurchaseToAuthor, sendNotificationRelateToPurchaseToUser } from "../utils/notification.js";
 
 dotenv.config();
 
@@ -400,7 +401,8 @@ stripeWebhookRouter.post(
 
           const book = await prisma.book.findUnique({
             where: { id: bookId },
-            select: { price: true }
+            select: { price: true },
+            include: { author: true, user: true },
           });
 
           if (!book) {
@@ -446,6 +448,57 @@ stripeWebhookRouter.post(
                 // stripePaymentIntentId: session.payment_intent, // Uncomment if you add this field to your model
               },
             });
+
+            const author = book.author;
+            const user = book.user;
+
+            console.log('user', user)
+
+            console.log('author', author)
+
+            if (author?.fcm_token) {
+              await sendNotificationRelateToPurchaseToAuthor({
+                token: author.fcm_token,
+                body: `${user.fullName} purchased your book "${book.title}".`
+              });
+            }
+
+            if (user?.fcm_token) {
+              await sendNotificationRelateToPurchaseToUser({
+                token: user.fcm_token,
+                body: `You purchased the book "${book.title}" by ${author.fullName || 'an author'}.`
+              });
+            }
+
+            await createNotificationForAuthor({
+              toAuthorId: authorId,
+              byUserId: userId,
+              bookId: bookId,
+              data: {
+                bookId,
+                userId,
+                amount: totalAmountPaid,
+              },
+              type: "BOOK_PURCHASE",
+              content: `Book Purchase Successfully`
+            })
+
+            console.log('createNotificationForAuthor', createNotificationForAuthor)
+
+            await createNotificationForUser({
+              toUserId: userId,
+              byAuthorId: authorId,
+              bookId: bookId,
+              data: {
+                bookId,
+                authorId,
+                amount: totalAmountPaid,
+              },
+              type: "BOOK_PURCHASE",
+              content: `Book Purchase Successfully`,
+            });
+
+
             console.log(
               isOnboarded
                 ? `✅ Book purchased, earnings routed to author ${authorId}. Author earning: ${authorEarning.toFixed(2)}, Admin commission: ${commissionAmount.toFixed(2)}`

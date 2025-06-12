@@ -924,6 +924,7 @@ export const getAllEbookById = async (req, res) => {
             include: {
                 bookMedia: true,
                 author: true,
+                Purchase: true,
                 books: {
                     include: {
                         category: true

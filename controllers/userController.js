@@ -14,7 +14,7 @@ import hbs from "nodemailer-express-handlebars";
 import Stripe from 'stripe';
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 import { generateOTP, getAuthorStats } from "../utils/helper.js";
-import { createNotificationForAuthor, sendNotificationRelateToFollow } from "../utils/notification.js";
+import { createNotificationForAuthor, sendNotificationRelateToFollow, sendNotificationRelateToPurchaseToAuthor, sendNotificationRelateToPurchaseToUser } from "../utils/notification.js";
 import { CLIENT_RENEG_LIMIT } from "tls";
 dotenv.config();
 const prisma = new PrismaClient();

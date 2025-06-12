@@ -112,6 +112,59 @@ export async function sendNotificationRelateToQaSessionToUser(params) {
     }
 };
 
+export async function sendNotificationRelateToPurchaseToAuthor(params) {
+
+    if (params.token === null) {
+        console.log("Author does not have fcm token")
+        return;
+    }
+    console.log("till here ")
+
+    var message = { //this may vary according to the message type (single recipient, multicast, topic, et cetera)
+        token: params.token,
+        notification: {
+            title: 'Book Purchase Notification',
+            body: `${params.body}`,
+        },
+        data: {  //you can send only notification or only data(or include both)
+            type: "purchase"
+        },
+    };
+
+    try {
+        const response = await admin.messaging().send(message);
+        console.log('Successfully sent message:', response);
+    } catch (error) {
+        console.error('Error sending message:', error);
+    }
+};
+
+export async function sendNotificationRelateToPurchaseToUser(params) {
+
+    if (params.token === null) {
+        console.log("user does not have fcm token")
+        return;
+    }
+    console.log("till here ")
+
+    var message = { //this may vary according to the message type (single recipient, multicast, topic, et cetera)
+        token: params.token,
+        notification: {
+            title: 'Book Purchase Notification',
+            body: `${params.body}`,
+        },
+        data: {  //you can send only notification or only data(or include both)
+            type: "purchase"
+        },
+    };
+
+    try {
+        const response = await admin.messaging().send(message);
+        console.log('Successfully sent message:', response);
+    } catch (error) {
+        console.error('Error sending message:', error);
+    }
+};
 
 export async function createNotificationForAuthor(params) {
     try {
