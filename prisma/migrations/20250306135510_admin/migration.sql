@@ -1,5 +1,0 @@
--- AlterTable
-ALTER TABLE `admin` ADD COLUMN `status` INTEGER NOT NULL DEFAULT 1;
-
--- AlterTable
-ALTER TABLE `author` ADD COLUMN `status` INTEGER NOT NULL DEFAULT 1;

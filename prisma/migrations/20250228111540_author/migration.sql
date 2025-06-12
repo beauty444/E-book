@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE `author` ADD COLUMN `isOnline` INTEGER NOT NULL DEFAULT 0;

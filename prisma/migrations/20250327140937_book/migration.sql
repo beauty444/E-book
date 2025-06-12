@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE `book` ADD COLUMN `type` INTEGER NOT NULL DEFAULT 1;
