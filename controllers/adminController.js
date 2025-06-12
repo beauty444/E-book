@@ -582,7 +582,7 @@ export const getdashboard = async (req, res) => {
             }
         });
 
-         const TotalSalesAmount = await prisma.purchase.aggregate({
+        const TotalSalesAmount = await prisma.purchase.aggregate({
             _sum: {
                 price: true
             }
@@ -677,21 +677,107 @@ export async function getAllReader(req, res) {
     }
 }
 
+// export async function getAllAuthor(req, res) {
+//     try {
+//         const { search, page = 1, limit = 10, adminCreated } = req.query;
+
+//         console.log("adminCreated", adminCreated)
+//         let isCreatedByAdmin;
+//         if (adminCreated == '1') {
+//             console.log("here aaa");
+//             isCreatedByAdmin = true
+//         }
+//         else {
+//             console.log("here bbb");
+//             isCreatedByAdmin = false
+//         }
+//         console.log("isCreatedByadmin", isCreatedByAdmin)
+
+//         const skip = (parseInt(page) - 1) * parseInt(limit);
+//         const take = parseInt(limit);
+
+//         const filterQuery = {
+//             ...(search && {
+//                 OR: [
+//                     { fullName: { contains: search } },
+//                     { email: { contains: search } },
+//                 ],
+//             }),
+//             ...({
+//                 isCreatedByAdmin: isCreatedByAdmin
+//             })
+//         };
+
+//         const authors = await prisma.author.findMany({
+//             where: filterQuery,
+//             skip,
+//             take,
+//             orderBy: { id: 'desc' }
+//         });
+
+//         const totaCount = await prisma.author.count({
+//             where: filterQuery
+//         })
+
+//         // Run getAuthorStats() for each author in parallel
+//         const authorStats = await Promise.all(
+//             authors.map(author => getAuthorStats(author.id))
+//         );
+
+//         // Merge stats and format image URLs
+//         const updatedAuthors = authors.map((author, index) => {
+//             const stats = authorStats[index];
+//             return {
+//                 ...author,
+//                 publishedBooksCount: stats.publishedCount,
+//                 followersCount: stats.followersCount,
+//                 avatar_url: author.avatar_url ? `${baseurl}/books/${author.avatar_url}` : null,
+//                 coverImage: author.coverImage ? `${baseurl}/books/${author.coverImage}` : null,
+//             };
+//         });
+
+//         return res.status(200).json({
+//             success: true,
+//             message: "Authors retrieved successfully",
+//             status: 200,
+//             authors: updatedAuthors,
+//             totaCount
+//         });
+
+//     } catch (error) {
+//         console.error("Error fetching authors:", error);
+//         return res.status(500).json({
+//             success: false,
+//             message: "Internal server error",
+//             status: 500,
+//             error: error.message
+//         });
+//     }
+// }
+
 export async function getAllAuthor(req, res) {
     try {
-        const { search, page = 1, limit = 10 } = req.query;
+        const { search, page = 1, limit = 10, adminCreated } = req.query;
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
         const take = parseInt(limit);
 
-        const filterQuery = {
-            ...(search && {
-                OR: [
-                    { fullName: { contains: search } },
-                    { email: { contains: search } },
-                ],
-            }),
-        };
+        let filterQuery = {};
+
+        // 🔍 Add search filter
+        if (search) {
+            filterQuery.OR = [
+                { fullName: { contains: search } },
+                { email: { contains: search } },
+            ];
+        }
+
+        // ✅ Add adminCreated filter only if provided
+        if (adminCreated === '1') {
+            filterQuery.isCreatedByAdmin = true;
+        } else if (adminCreated === '0') {
+            filterQuery.isCreatedByAdmin = false;
+        }
 
         const authors = await prisma.author.findMany({
             where: filterQuery,
@@ -702,14 +788,13 @@ export async function getAllAuthor(req, res) {
 
         const totaCount = await prisma.author.count({
             where: filterQuery
-        })
+        });
 
-        // Run getAuthorStats() for each author in parallel
+        // 🧮 Get stats for each author
         const authorStats = await Promise.all(
             authors.map(author => getAuthorStats(author.id))
         );
 
-        // Merge stats and format image URLs
         const updatedAuthors = authors.map((author, index) => {
             const stats = authorStats[index];
             return {
@@ -739,6 +824,7 @@ export async function getAllAuthor(req, res) {
         });
     }
 }
+
 
 export async function getAuthorById(req, res) {
     const { id } = req.params;
@@ -950,15 +1036,30 @@ export async function getAllEbook(req, res) {
     }
 }
 
+
 export const getAllEbookById = async (req, res) => {
     const { id } = req.params;
+
     try {
         const book = await prisma.book.findUnique({
             where: { id: parseInt(id) },
             include: {
                 bookMedia: true,
                 author: true,
-                Purchase: true,
+                Purchase: {
+                    orderBy: {
+                        createdAt: 'desc'
+                    },
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                fullName: true,
+                                avatar_url: true
+                            }
+                        }
+                    }
+                },
                 books: {
                     include: {
                         category: true
@@ -975,19 +1076,16 @@ export const getAllEbookById = async (req, res) => {
             });
         }
 
-        // Check if book is favorited by the user
+
         const isFavorite = await prisma.favorite.findFirst({
             where: {
                 userId: req.user.id,
                 bookId: parseInt(id)
             }
         });
-
-        console.log('isFavorite', isFavorite)
-
         book.isFavorite = !!isFavorite;
 
-        // Format media URLs
+
         book.coverImage = book.coverImage ? baseurl + "/books/" + book.coverImage : null;
         book.pdfUrl = book.pdfUrl ? baseurl + "/books/" + book.pdfUrl : null;
         book.audioUrl = book.audioUrl ? baseurl + "/books/" + book.audioUrl : null;
@@ -1001,15 +1099,23 @@ export const getAllEbookById = async (req, res) => {
 
         const favorite = await prisma.favorite.count({
             where: { bookId: parseInt(id) }
-        })
-
-        book.favorite = favorite
+        });
+        book.favorite = favorite;
 
         const totalViews = await prisma.bookRead.count({
             where: { bookId: parseInt(id) }
-        })
+        });
+        book.totalViews = totalViews;
 
-        book.totalViews = totalViews
+
+        const earnings = await prisma.purchase.aggregate({
+            where: { bookId: parseInt(id), status: 'paid' },
+            _sum: {
+                authorEarning: true
+            }
+        });
+        book.totalEarnings = earnings._sum.authorEarning || 0;
+
 
         return res.status(200).json({
             success: true,
@@ -1028,6 +1134,86 @@ export const getAllEbookById = async (req, res) => {
         });
     }
 };
+
+
+// export const getAllEbookById = async (req, res) => {
+//     const { id } = req.params;
+//     try {
+//         const book = await prisma.book.findUnique({
+//             where: { id: parseInt(id) },
+//             include: {
+//                 bookMedia: true,
+//                 author: true,
+//                 Purchase: true,
+//                 books: {
+//                     include: {
+//                         category: true
+//                     }
+//                 },
+//             }
+//         });
+
+//         if (!book) {
+//             return res.status(404).json({
+//                 success: false,
+//                 message: "Book not found",
+//                 status: 404
+//             });
+//         }
+
+//         // Check if book is favorited by the user
+//         const isFavorite = await prisma.favorite.findFirst({
+//             where: {
+//                 userId: req.user.id,
+//                 bookId: parseInt(id)
+//             }
+//         });
+
+//         console.log('isFavorite', isFavorite)
+
+//         book.isFavorite = !!isFavorite;
+
+//         // Format media URLs
+//         book.coverImage = book.coverImage ? baseurl + "/books/" + book.coverImage : null;
+//         book.pdfUrl = book.pdfUrl ? baseurl + "/books/" + book.pdfUrl : null;
+//         book.audioUrl = book.audioUrl ? baseurl + "/books/" + book.audioUrl : null;
+
+//         if (book.bookMedia.length > 0) {
+//             book.bookMedia = book.bookMedia.map(item => ({
+//                 ...item,
+//                 mediaUrl: baseurl + "/books/" + item.mediaUrl
+//             }));
+//         }
+
+//         const favorite = await prisma.favorite.count({
+//             where: { bookId: parseInt(id) }
+//         })
+
+//         book.favorite = favorite
+
+//         const totalViews = await prisma.bookRead.count({
+//             where: { bookId: parseInt(id) }
+//         })
+
+//         book.totalViews = totalViews
+
+//         return res.status(200).json({
+//             success: true,
+//             message: "Book retrieved successfully",
+//             status: 200,
+//             book
+//         });
+
+//     } catch (error) {
+//         console.error("Error fetching book:", error);
+//         return res.status(500).json({
+//             success: false,
+//             message: "Internal server error",
+//             status: 500,
+//             error: error.message,
+//         });
+//     }
+// };
 
 export async function getAllChats(req, res) {
     try {
@@ -1977,7 +2163,6 @@ export async function addAuthor(req, res) {
 
 export const getAllPurchase = async (req, res) => {
     try {
-
         const {
             search,
             page = 1,
@@ -1986,20 +2171,11 @@ export const getAllPurchase = async (req, res) => {
             authorName,
             adminCreated
         } = req.query;
-        console.log("adminCreated", adminCreated)
-        let isCreatedByAdmin;
-        if (adminCreated == '1') {
-            console.log("here aaa");
-            isCreatedByAdmin = true
-        }
-        else {
-            console.log("here bbb");
-            isCreatedByAdmin = false
-        }
-        console.log("isCreatedByadmin", isCreatedByAdmin)
+
+        console.log("adminCreated", adminCreated);
+
         const skip = (parseInt(page) - 1) * parseInt(limit);
         const take = parseInt(limit);
-
 
         const filterConditions = {
             ...(search && {
@@ -2024,21 +2200,34 @@ export const getAllPurchase = async (req, res) => {
                     },
                 ],
             }),
-            ...({
+            ...(adminCreated === '1' && {
                 author: {
-                    isCreatedByAdmin: isCreatedByAdmin
+                    is: {
+                        isCreatedByAdmin: true
+                    }
+                }
+            }),
+            ...(adminCreated === '0' && {
+                author: {
+                    is: {
+                        isCreatedByAdmin: false
+                    }
                 }
             })
         };
-
-
 
         const purchases = await prisma.purchase.findMany({
             where: filterConditions,
             skip,
             take,
             include: {
-                user: true,
+                user: {
+                    select: {
+                        id: true,
+                        fullName: true,
+                        avatar_url: true
+                    }
+                },
                 book: true,
                 author: true,
             },
@@ -2077,6 +2266,7 @@ export const getAllPurchase = async (req, res) => {
         });
     }
 };
+
 
 export async function getPlans(req, res) {
     try {
@@ -2125,7 +2315,6 @@ export const getAdminSalesSummary = async (req, res) => {
         });
     }
 }
-
 
 // export const overrideBookPrice = async (req, res) => {
 //   try {
