@@ -563,7 +563,36 @@ export const getdashboard = async (req, res) => {
         console.log('TotalUsers', TotalUsers)
 
         const TotalAuthors = await prisma.author.count({
+            where: {
+                isCreatedByAdmin: false
+            }
         });
+
+        const TotalAdminAuthors = await prisma.author.count({
+            where: {
+                isCreatedByAdmin: true
+            }
+        });
+
+        const TotalSubscription = await prisma.subscription.count({
+        });
+
+        const TotalSubscriptionAmount = await prisma.subscription.aggregate({
+            _sum: {
+                amount: true
+            }
+        });
+
+         const TotalSalesAmount = await prisma.purchase.aggregate({
+            _sum: {
+                price: true
+            }
+        });
+
+        console.log(TotalSubscriptionAmount);
+        // output: { _sum: { amount: 12345 } }
+
+
 
         const TotalBooks = await prisma.book.count();
 
@@ -573,7 +602,7 @@ export const getdashboard = async (req, res) => {
             }
         });
         res.json({
-            TotalUsers, TotalAuthors, TotalBooks, ActiveChatRoom
+            TotalUsers, TotalAuthors, TotalBooks, ActiveChatRoom,TotalAdminAuthors,TotalSubscription,TotalSubscriptionAmount,TotalSalesAmount
         });
     } catch (error) {
         console.log('error', error)
@@ -1949,9 +1978,19 @@ export const getAllPurchase = async (req, res) => {
             limit = 10,
             bookName,
             authorName,
+            adminCreated
         } = req.query;
-
-
+        console.log("adminCreated", adminCreated)
+        let isCreatedByAdmin;
+        if (adminCreated == '1') {
+            console.log("here aaa");
+            isCreatedByAdmin = true
+        }
+        else {
+            console.log("here bbb");
+            isCreatedByAdmin = false
+        }
+        console.log("isCreatedByadmin", isCreatedByAdmin)
         const skip = (parseInt(page) - 1) * parseInt(limit);
         const take = parseInt(limit);
 
@@ -1979,6 +2018,11 @@ export const getAllPurchase = async (req, res) => {
                     },
                 ],
             }),
+            ...({
+                author: {
+                    isCreatedByAdmin: isCreatedByAdmin
+                }
+            })
         };
 
 
@@ -2014,7 +2058,7 @@ export const getAllPurchase = async (req, res) => {
             status: 200,
             message: 'Purchase records fetched successfully',
             purchases: updatedPurchases,
-            totalCount: purchases.length 
+            totalCount: purchases.length
         });
 
     } catch (error) {
@@ -2131,36 +2175,6 @@ export const getAllSubscription = async (req, res) => {
             message: 'Get All Plans',
             success: true,
             data: subscription,
-        });
-    } catch (error) {
-        console.log(error);
-        return res.status(500).json({
-            status: 500,
-            message: 'Internal Server Error',
-            success: false,
-            error: error.message
-        });
-    }
-}
-
-export const getAllAdminEarningByCreatedAuthor = async (req, res) => {
-    try {
-        const earning = await prisma.purchase.findMany({
-            where: {
-                author: {
-                    isCreatedByAdmin: true
-                }
-            },
-            include: {
-                author: true
-            }
-        })
-
-        return res.status(200).json({
-            status: 200,
-            message: 'Get All Plans',
-            success: true,
-            data: earning,
         });
     } catch (error) {
         console.log(error);
