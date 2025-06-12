@@ -556,7 +556,6 @@ export async function editProfile(req, res) {
 export const getdashboard = async (req, res) => {
     try {
 
-
         const TotalUsers = await prisma.user.count({
         });
 
@@ -592,17 +591,23 @@ export const getdashboard = async (req, res) => {
         console.log(TotalSubscriptionAmount);
         // output: { _sum: { amount: 12345 } }
 
-
-
         const TotalBooks = await prisma.book.count();
 
         const ActiveChatRoom = await prisma.chat.count({
-            where: {
-                isGroupChat: true,
-            }
         });
+
+        const totalSales = await prisma.purchase.findMany({
+            include: {
+                book: true,
+                user: true,
+                author:true
+
+            },
+            orderBy: { createdAt: 'desc' },
+        })
+
         res.json({
-            TotalUsers, TotalAuthors, TotalBooks, ActiveChatRoom, TotalAdminAuthors, TotalSubscription, TotalSubscriptionAmount, TotalSalesAmount
+            TotalUsers, TotalAuthors, TotalBooks, ActiveChatRoom,TotalAdminAuthors,TotalSubscription,TotalSubscriptionAmount,TotalSalesAmount,totalSales
         });
     } catch (error) {
         console.log('error', error)

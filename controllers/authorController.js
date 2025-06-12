@@ -1917,7 +1917,6 @@ export const getdashboard = async (req, res) => {
 
         console.log("Book IDs:", bookIds);
 
-
         console.log('purchases', purchases)
 
         const totalEarning = purchases.reduce((sum, p) => sum + p.amount, 0);
@@ -1930,6 +1929,44 @@ export const getdashboard = async (req, res) => {
             _sum: { amount: true }
         });
 
+        const totalChatrooms = await prisma.chat.count({
+            where: {
+                OR: [
+                    { adminId: req.user.id },
+                    {
+                        participants: {
+                            some: {
+                                authorId: req.user.id
+                            }
+                        }
+                    }
+                ]
+            },
+
+
+        })
+
+        const uniqueBooksPurchased = await prisma.purchase.groupBy({
+            by: ['bookId'],
+            where: {
+                authorId: authorId
+            }
+        });
+
+
+        const totalSales = await prisma.purchase.findMany({
+            where: {
+                authorId: req.user.id
+            },
+            include: {
+                book: true,
+                user: true
+            },
+            orderBy: { createdAt: 'desc' },
+        })
+
+        const uniqueBooksPurchasedCount = uniqueBooks.length;
+
         const heldAmount = heldAmountResult._sum.amount || 0;
 
         return res.status(200).json({
@@ -1941,9 +1978,13 @@ export const getdashboard = async (req, res) => {
                 totalBooks,
                 totalReviews,
                 totalEarning,
-                heldAmount
+                totalChatrooms,
+                uniqueBooksPurchasedCount,
+                totalSales
             }
         });
+
+
 
     } catch (error) {
         console.error('Dashboard Error:', error);
